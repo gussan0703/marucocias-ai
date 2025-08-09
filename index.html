@@ -301,16 +301,6 @@
             display: none;
         }
 
-        .calendar-demo-notice {
-            background: rgba(0, 255, 127, 0.1);
-            border: 1px solid #00ff7f;
-            border-radius: 10px;
-            padding: 10px;
-            margin: 10px 0;
-            color: #00ff7f;
-            text-align: center;
-        }
-
         @media (max-width: 768px) {
             .main-content {
                 flex-direction: column;
@@ -451,22 +441,12 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadSettings();
             initSpeechRecognition();
+            initCharacterImage();
             startMoodRotation();
             document.getElementById('settingsPanel').classList.add('hidden');
             handleOAuthCallback();
-            
-            // Google APIs の読み込み
             loadGoogleAPIs();
         });
-
-        function loadGoogleAPIs() {
-            // Google Identity Services のみを読み込み（最新の推奨方法）
-            loadGoogleIdentityServices().then(function() {
-                console.log('Google Identity Services ready');
-            }).catch(function(error) {
-                console.error('Failed to load Google Identity Services:', error);
-            });
-        }
 
         function toggleSettings() {
             var panel = document.getElementById('settingsPanel');
@@ -477,7 +457,6 @@
             openaiKey = document.getElementById('openaiKey').value;
             googleClientId = document.getElementById('googleClientId').value;
             
-            // ローカルストレージに保存
             localStorage.setItem('marcocias_openai_key', openaiKey);
             localStorage.setItem('marcocias_google_client_id', googleClientId);
             
@@ -512,298 +491,17 @@
             }
         }
 
-        // 削除: testGoogleAuth, debugOAuthSettings, enableDemoMode, showDemoNotice, tryAlternativeAuth関数を削除4. クライアントIDのリダイレクトURIが正確に設定されているか\n\n' +
-                '🔗 設定確認リンク: ' + consoleUrl + '\n\n' +
-                '問題が解決しない場合は、一度すべての設定を削除して再作成することをお勧めします。'
-            );
-        }
-
-        function enableDemoMode() {
-            isDemoMode = true;
-            localStorage.setItem('marcocias_demo_mode', 'true');
-            updateStatus('デモモードが有効になりました');
-            updateCharacterMood('デモモード有効');
-            showDemoNotice();
-            speakText('デモモードを有効にしました。カレンダー機能をテストできます。', true);
-            toggleSettings();
-        }
-
-        function showDemoNotice() {
-            var notice = document.createElement('div');
-            notice.className = 'calendar-demo-notice';
-            notice.innerHTML = '📅 デモモード: カレンダー機能が利用可能です（実際のGoogleカレンダーには追加されません）';
+        function initCharacterImage() {
+            var img = document.getElementById('characterImg');
             
-            var chatContainer = document.querySelector('.chat-container');
-            chatContainer.insertBefore(notice, chatContainer.firstChild);
+            img.onerror = function() {
+                var characterImage = document.getElementById('characterImage');
+                characterImage.innerHTML = '<div style="font-size: 60px;">🤖</div>';
+            };
             
-            setTimeout(function() {
-                if (notice.parentNode) {
-                    notice.parentNode.removeChild(notice);
-                }
-            }, 5000);
-        }
-
-        function testGoogleAuth() {
-            if (!googleClientId) {
-                alert('Google Client IDを先に設定してください。');
-                return;
-            }
-
-            updateStatus('Google認証の設定をテスト中...');
-            
-            // 認証URLの構成をテスト
-            var redirectUri = window.location.origin + window.location.pathname;
-            var scope = 'https://www.googleapis.com/auth/calendar';
-            
-            var testUrl = 'https://accounts.google.com/oauth2/auth?' +
-                'client_id=' + encodeURIComponent(googleClientId) + '&' +
-                'redirect_uri=' + encodeURIComponent(redirectUri) + '&' +
-                'scope=' + encodeURIComponent(scope) + '&' +
-                'response_type=code&' +
-                'access_type=offline';
-
-            console.log('=== 認証テスト情報 ===');
-            console.log('Client ID:', googleClientId);
-            console.log('Redirect URI:', redirectUri);
-            console.log('Test URL:', testUrl);
-            
-            // URLの妥当性をテスト
-            try {
-                new URL(testUrl);
-                updateStatus('認証URLの構成は正常です。実際の接続をテストしてください。');
-                updateCharacterMood('認証準備完了');
-            } catch (error) {
-                updateStatus('認証URLの構成に問題があります: ' + error.message);
-                updateCharacterMood('認証設定エラー');
-            }
-        }
-
-        function connectGoogleCalendar() {
-            if (!googleClientId) {
-                alert('Google Client IDが設定されていません。');
-                return;
-            }
-
-            updateStatus('Google認証を開始しています...');
-            updateCharacterMood('認証中...');
-
-            // 最新のGoogle Identity Services を使用
-            if (typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
-                initGoogleIdentityServices();
-            } else {
-                // Google Identity Services がロードされていない場合
-                loadGoogleIdentityServices().then(function() {
-                    initGoogleIdentityServices();
-                }).catch(function(error) {
-                    console.error('Google Identity Services の読み込みに失敗:', error);
-                    handleAuthError({error: 'library_load_failed'});
-                });
-            }
-        }
-
-        function loadGoogleIdentityServices() {
-            return new Promise(function(resolve, reject) {
-                if (typeof google !== 'undefined' && google.accounts) {
-                    resolve();
-                    return;
-                }
-
-                var script = document.createElement('script');
-                script.src = 'https://accounts.google.com/gsi/client';
-                script.onload = function() {
-                    console.log('Google Identity Services loaded successfully');
-                    resolve();
-                };
-                script.onerror = function() {
-                    reject(new Error('Failed to load Google Identity Services'));
-                };
-                document.head.appendChild(script);
-            });
-        }
-
-        function initGoogleIdentityServices() {
-            updateStatus('Google Identity Services を初期化中...');
-            
-            try {
-                var tokenClient = google.accounts.oauth2.initTokenClient({
-                    client_id: googleClientId,
-                    scope: 'https://www.googleapis.com/auth/calendar',
-                    // ポップアップの代わりにリダイレクトを使用
-                    ux_mode: 'redirect',
-                    redirect_uri: window.location.origin + window.location.pathname,
-                    callback: function(response) {
-                        console.log('認証レスポンス:', response);
-                        
-                        if (response.error) {
-                            console.error('認証エラー:', response);
-                            handleAuthError(response);
-                            return;
-                        }
-
-                        if (response.access_token) {
-                            googleAccessToken = response.access_token;
-                            localStorage.setItem('marcocias_google_access_token', googleAccessToken);
-                            
-                            updateStatus('Googleカレンダーに接続しました！');
-                            updateCharacterMood('カレンダー準備完了！');
-                            speakText('Googleカレンダーに接続しました。予定の追加が可能です。', true);
-                            
-                            addMessage('ai', '🎉 Googleカレンダーとの認証が完了しました！\n\n✅ 実際のGoogleカレンダーに予定を追加できます\n✅ 「明日の14時に会議を追加して」などと話しかけてください');
-                            
-                            testCalendarConnection();
-                        } else {
-                            handleAuthError({error: 'no_access_token'});
-                        }
-                    },
-                    error_callback: function(error) {
-                        console.error('Token client error:', error);
-                        
-                        if (error.type === 'popup_closed') {
-                            // ポップアップが閉じられた場合は代替方法を提案
-                            updateStatus('ポップアップが閉じられました。代替方法を試しています...');
-                            setTimeout(function() {
-                                tryAlternativeAuth();
-                            }, 1000);
-                        } else {
-                            handleAuthError(error);
-                        }
-                    }
-                });
-
-                // アクセストークンをリクエスト
-                tokenClient.requestAccessToken({
-                    prompt: 'consent'
-                });
-
-            } catch (error) {
-                console.error('Google Identity Services 初期化エラー:', error);
-                handleAuthError({error: 'initialization_failed', details: error.message});
-            }
-        }
-
-        function tryAlternativeAuth() {
-            updateStatus('代替認証方法を試行中...');
-            
-            // Google OAuth2 エンドポイントに直接リダイレクト
-            var authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' +
-                'client_id=' + encodeURIComponent(googleClientId) + '&' +
-                'redirect_uri=' + encodeURIComponent(window.location.origin + window.location.pathname) + '&' +
-                'scope=' + encodeURIComponent('https://www.googleapis.com/auth/calendar') + '&' +
-                'response_type=token&' +
-                'include_granted_scopes=true&' +
-                'state=calendar_auth';
-
-            updateCharacterMood('リダイレクト認証中...');
-            addMessage('ai', '🔄 ポップアップ認証に失敗したため、ページリダイレクト方式で認証を行います。\n\nGoogleログイン画面に移動します...');
-            
-            setTimeout(function() {
-                window.location.href = authUrl;
-            }, 2000);
-        }
-
-        function handleAuthError(error) {
-            console.error('認証エラー:', error);
-            
-            var errorMessage = 'Google認証に失敗しました。';
-            var suggestion = '';
-            
-            if (error.type === 'popup_closed' || error.message === 'Popup window closed') {
-                errorMessage = 'ポップアップウィンドウが閉じられました。';
-                suggestion = 'ブラウザのポップアップブロッカーを無効にして再度お試しください。';
-            } else {
-                switch(error.error) {
-                    case 'idpiframe_initialization_failed':
-                        errorMessage = 'Google認証の初期化に失敗しました。';
-                        suggestion = 'OAuth同意画面とクライアントIDの設定を確認してください。';
-                        break;
-                    case 'popup_blocked':
-                        errorMessage = 'ポップアップがブロックされました。';
-                        suggestion = 'ブラウザのポップアップブロッカーを無効にしてください。';
-                        break;
-                    case 'library_load_failed':
-                        errorMessage = 'Google認証ライブラリの読み込みに失敗しました。';
-                        suggestion = 'インターネット接続を確認してください。';
-                        break;
-                    default:
-                        suggestion = '設定を確認してから再度お試しください。';
-                }
-            }
-            
-            updateStatus(errorMessage);
-            updateCharacterMood('認証失敗');
-            
-            addMessage('ai', '🚨 ' + errorMessage + '\n\n💡 対処法:\n' + suggestion);
-        }
-
-        function handleOAuthCallback() {
-            try {
-                var urlParams = new URLSearchParams(window.location.search);
-                var hash = window.location.hash.substring(1);
-                var hashParams = new URLSearchParams(hash);
-                
-                var code = urlParams.get('code');
-                var accessToken = hashParams.get('access_token');
-                var error = urlParams.get('error') || hashParams.get('error');
-                var state = urlParams.get('state') || hashParams.get('state');
-                
-                if (error) {
-                    console.error('OAuth error:', error);
-                    updateStatus('認証エラー: ' + error);
-                    updateCharacterMood('認証失敗');
-                    return;
-                }
-                
-                if (accessToken && state === 'calendar_auth') {
-                    updateStatus('認証成功！アクセストークンを取得しました。');
-                    
-                    googleAccessToken = accessToken;
-                    localStorage.setItem('marcocias_google_access_token', googleAccessToken);
-                    
-                    updateStatus('Googleカレンダーに接続しました！');
-                    updateCharacterMood('カレンダー準備完了！');
-                    speakText('Googleカレンダーに接続しました。予定の追加が可能です。', true);
-                    
-                    if (window.history && window.history.replaceState) {
-                        window.history.replaceState({}, document.title, window.location.pathname);
-                    }
-                    
-                    testCalendarConnection();
-                    
-                    addMessage('ai', '✅ Googleカレンダーとの認証が完了しました！\n\n「明日の14時に会議を追加して」などと話しかけてください。');
-                    return;
-                }
-                
-                if (code) {
-                    updateStatus('認証コードを受信しましたが、完全な認証には追加設定が必要です。');
-                    addMessage('ai', '📄 認証コードを受信しましたが、完全な認証にはサーバーサイド処理が必要です。Google Cloud Consoleの設定をご確認ください。');
-                }
-            } catch (error) {
-                console.log('OAuth callback処理をスキップ:', error);
-            }
-        }
-
-        function exchangeCodeForToken(code) {
-            updateStatus('Google認証中...');
-            updateCharacterMood('トークン取得中...');
-            
-            // デモ用の仮トークンを生成
-            setTimeout(function() {
-                googleAccessToken = 'demo_token_' + Date.now();
-                localStorage.setItem('marcocias_google_access_token', googleAccessToken);
-                
-                updateStatus('Googleカレンダーに接続しました (デモモード)');
-                updateCharacterMood('カレンダー準備完了！');
-                speakText('Googleカレンダーに接続しました。予定の追加が可能です。', true);
-                
-                // URLをクリーンアップ
-                if (window.history && window.history.replaceState) {
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                }
-                
-                isDemoMode = true;
-                localStorage.setItem('marcocias_demo_mode', 'true');
-                showDemoNotice();
-            }, 2000);
+            img.onload = function() {
+                updateCharacterMood('準備完了');
+            };
         }
 
         function startMoodRotation() {
@@ -855,7 +553,6 @@
 
                 recognition.onresult = function(event) {
                     if (isSpeaking) {
-                        console.log('音声読み上げ中のため認識結果を無視');
                         return;
                     }
                     
@@ -1099,7 +796,6 @@
             var now = new Date();
             var startTime = new Date(now);
             
-            // 日付の解析
             if (message.includes('明日')) {
                 startTime.setDate(now.getDate() + 1);
             } else if (message.includes('あさって')) {
@@ -1110,11 +806,10 @@
                 // 今日のまま
             }
             
-            // 時間の解析
             var timePatterns = [
-                /(\d{1,2})時(\d{1,2})分/,  // "14時30分"
-                /(\d{1,2})時/,            // "14時"
-                /(\d{1,2}):(\d{2})/       // "14:30"
+                /(\d{1,2})時(\d{1,2})分/,
+                /(\d{1,2})時/,
+                /(\d{1,2}):(\d{2})/
             ];
             
             var timeMatch = null;
@@ -1127,7 +822,6 @@
                 var hour = parseInt(timeMatch[1]);
                 var minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
                 
-                // 午後判定
                 if (message.includes('午後') && hour !== 12) {
                     hour += 12;
                 } else if (message.includes('午前') && hour === 12) {
@@ -1136,12 +830,10 @@
                 
                 startTime.setHours(hour, minute, 0, 0);
             } else {
-                // デフォルトは現在時刻の1時間後
                 startTime.setTime(now.getTime() + 60 * 60 * 1000);
                 startTime.setMinutes(0, 0, 0);
             }
             
-            // 終了時間は1時間後
             var endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
             
             return {
@@ -1194,7 +886,6 @@
                            '🔗 イベントID: ' + result.id.substring(0, 8) + '...\n\n' +
                            'Googleカレンダーアプリでご確認ください！');
                 }).catch(function(error) {
-                    console.error('Calendar API Error:', error);
                     resolve('❌ カレンダーの追加に失敗しました。\n' +
                            'エラー: ' + error.message + '\n\n' +
                            '認証を更新してから再度お試しください。');
@@ -1281,6 +972,229 @@
         function handleKeyPress(event) {
             if (event.key === 'Enter') {
                 sendMessage();
+            }
+        }
+
+        function connectGoogleCalendar() {
+            if (!googleClientId) {
+                alert('Google Client IDが設定されていません。');
+                return;
+            }
+
+            updateStatus('Google認証を開始しています...');
+            updateCharacterMood('認証中...');
+
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+                initGoogleIdentityServices();
+            } else {
+                loadGoogleIdentityServices().then(function() {
+                    initGoogleIdentityServices();
+                }).catch(function(error) {
+                    handleAuthError({error: 'library_load_failed'});
+                });
+            }
+        }
+
+        function loadGoogleAPIs() {
+            loadGoogleIdentityServices().then(function() {
+                console.log('Google Identity Services ready');
+            }).catch(function(error) {
+                console.error('Failed to load Google Identity Services:', error);
+            });
+        }
+
+        function loadGoogleIdentityServices() {
+            return new Promise(function(resolve, reject) {
+                if (typeof google !== 'undefined' && google.accounts) {
+                    resolve();
+                    return;
+                }
+
+                var script = document.createElement('script');
+                script.src = 'https://accounts.google.com/gsi/client';
+                script.onload = function() {
+                    resolve();
+                };
+                script.onerror = function() {
+                    reject(new Error('Failed to load Google Identity Services'));
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        function initGoogleIdentityServices() {
+            updateStatus('Google Identity Services を初期化中...');
+            
+            try {
+                var tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: googleClientId,
+                    scope: 'https://www.googleapis.com/auth/calendar',
+                    ux_mode: 'redirect',
+                    redirect_uri: window.location.origin + window.location.pathname,
+                    callback: function(response) {
+                        if (response.error) {
+                            handleAuthError(response);
+                            return;
+                        }
+
+                        if (response.access_token) {
+                            googleAccessToken = response.access_token;
+                            localStorage.setItem('marcocias_google_access_token', googleAccessToken);
+                            
+                            updateStatus('Googleカレンダーに接続しました！');
+                            updateCharacterMood('カレンダー準備完了！');
+                            speakText('Googleカレンダーに接続しました。予定の追加が可能です。', true);
+                            
+                            addMessage('ai', '🎉 Googleカレンダーとの認証が完了しました！\n\n✅ 実際のGoogleカレンダーに予定を追加できます\n✅ 「明日の14時に会議を追加して」などと話しかけてください');
+                            
+                            testCalendarConnection();
+                        } else {
+                            handleAuthError({error: 'no_access_token'});
+                        }
+                    },
+                    error_callback: function(error) {
+                        if (error.type === 'popup_closed') {
+                            updateStatus('ポップアップが閉じられました。代替方法を試しています...');
+                            setTimeout(function() {
+                                tryAlternativeAuth();
+                            }, 1000);
+                        } else {
+                            handleAuthError(error);
+                        }
+                    }
+                });
+
+                tokenClient.requestAccessToken({
+                    prompt: 'consent'
+                });
+
+            } catch (error) {
+                handleAuthError({error: 'initialization_failed', details: error.message});
+            }
+        }
+
+        function tryAlternativeAuth() {
+            updateStatus('代替認証方法を試行中...');
+            
+            var authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' +
+                'client_id=' + encodeURIComponent(googleClientId) + '&' +
+                'redirect_uri=' + encodeURIComponent(window.location.origin + window.location.pathname) + '&' +
+                'scope=' + encodeURIComponent('https://www.googleapis.com/auth/calendar') + '&' +
+                'response_type=token&' +
+                'include_granted_scopes=true&' +
+                'state=calendar_auth';
+
+            updateCharacterMood('リダイレクト認証中...');
+            addMessage('ai', '🔄 ポップアップ認証に失敗したため、ページリダイレクト方式で認証を行います。\n\nGoogleログイン画面に移動します...');
+            
+            setTimeout(function() {
+                window.location.href = authUrl;
+            }, 2000);
+        }
+
+        function handleAuthError(error) {
+            var errorMessage = 'Google認証に失敗しました。';
+            var suggestion = '';
+            
+            if (error.type === 'popup_closed' || error.message === 'Popup window closed') {
+                errorMessage = 'ポップアップウィンドウが閉じられました。';
+                suggestion = 'ブラウザのポップアップブロッカーを無効にして再度お試しください。';
+            } else {
+                switch(error.error) {
+                    case 'idpiframe_initialization_failed':
+                        errorMessage = 'Google認証の初期化に失敗しました。';
+                        suggestion = 'OAuth同意画面とクライアントIDの設定を確認してください。';
+                        break;
+                    case 'popup_blocked':
+                        errorMessage = 'ポップアップがブロックされました。';
+                        suggestion = 'ブラウザのポップアップブロッカーを無効にしてください。';
+                        break;
+                    case 'library_load_failed':
+                        errorMessage = 'Google認証ライブラリの読み込みに失敗しました。';
+                        suggestion = 'インターネット接続を確認してください。';
+                        break;
+                    default:
+                        suggestion = '設定を確認してから再度お試しください。';
+                }
+            }
+            
+            updateStatus(errorMessage);
+            updateCharacterMood('認証失敗');
+            
+            addMessage('ai', '🚨 ' + errorMessage + '\n\n💡 対処法:\n' + suggestion);
+        }
+
+        function testCalendarConnection() {
+            if (!googleAccessToken || !googleAccessToken.startsWith('ya29.')) {
+                return;
+            }
+
+            updateStatus('カレンダー接続をテスト中...');
+            
+            fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+                headers: {
+                    'Authorization': 'Bearer ' + googleAccessToken
+                }
+            }).then(function(response) {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    throw new Error('Calendar API test failed: ' + response.status);
+                }
+            }).then(function(data) {
+                updateStatus('Googleカレンダーとの接続を確認しました');
+                updateCharacterMood('カレンダー機能有効');
+                addMessage('ai', '✅ Googleカレンダーとの接続が確認できました。予定の追加が可能です。');
+            }).catch(function(error) {
+                updateStatus('カレンダー接続のテストに失敗しました');
+                updateCharacterMood('カレンダーテスト失敗');
+                addMessage('ai', '⚠️ カレンダー接続のテストでエラーが発生しましたが、基本機能は利用可能です。');
+            });
+        }
+
+        function handleOAuthCallback() {
+            try {
+                var urlParams = new URLSearchParams(window.location.search);
+                var hash = window.location.hash.substring(1);
+                var hashParams = new URLSearchParams(hash);
+                
+                var code = urlParams.get('code');
+                var accessToken = hashParams.get('access_token');
+                var error = urlParams.get('error') || hashParams.get('error');
+                var state = urlParams.get('state') || hashParams.get('state');
+                
+                if (error) {
+                    updateStatus('認証エラー: ' + error);
+                    updateCharacterMood('認証失敗');
+                    return;
+                }
+                
+                if (accessToken && state === 'calendar_auth') {
+                    updateStatus('認証成功！アクセストークンを取得しました。');
+                    
+                    googleAccessToken = accessToken;
+                    localStorage.setItem('marcocias_google_access_token', googleAccessToken);
+                    
+                    updateStatus('Googleカレンダーに接続しました！');
+                    updateCharacterMood('カレンダー準備完了！');
+                    speakText('Googleカレンダーに接続しました。予定の追加が可能です。', true);
+                    
+                    if (window.history && window.history.replaceState) {
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
+                    
+                    testCalendarConnection();
+                    
+                    addMessage('ai', '✅ Googleカレンダーとの認証が完了しました！\n\n「明日の14時に会議を追加して」などと話しかけてください。');
+                    return;
+                }
+                
+                if (code) {
+                    updateStatus('認証コードを受信しましたが、完全な認証には追加設定が必要です。');
+                    addMessage('ai', '📄 認証コードを受信しましたが、完全な認証にはサーバーサイド処理が必要です。Google Cloud Consoleの設定をご確認ください。');
+                }
+            } catch (error) {
+                console.log('OAuth callback処理をスキップ:', error);
             }
         }
 

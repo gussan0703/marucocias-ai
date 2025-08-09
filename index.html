@@ -92,11 +92,11 @@
         }
 
         .character-panel {
-            flex: 0 0 280px;
+            flex: 0 0 200px;
             background: rgba(0, 0, 0, 0.3);
             border: 1px solid #00d4ff;
             border-radius: 15px;
-            padding: 15px;
+            padding: 10px;
             backdrop-filter: blur(10px);
             display: flex;
             flex-direction: column;
@@ -106,14 +106,14 @@
         }
 
         .character-image {
-            width: 180px;
-            height: 180px;
+            width: 120px;
+            height: 120px;
             background: rgba(255, 255, 255, 0.1);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             border: 2px solid #00d4ff;
             animation: float 3s ease-in-out infinite;
             overflow: hidden;
@@ -125,8 +125,8 @@
         }
 
         .character-image img {
-            width: 160px;
-            height: 160px;
+            width: 100px;
+            height: 100px;
             object-fit: cover;
             border-radius: 50%;
         }
@@ -190,16 +190,23 @@
             display: flex;
             gap: 10px;
             align-items: center;
+            flex-wrap: nowrap;
+        }
+
+        .voice-controls {
+            display: flex;
+            gap: 10px;
+            flex-shrink: 0;
         }
 
         .voice-button {
-            width: 60px;
-            height: 60px;
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
             background: linear-gradient(45deg, #00d4ff, #0099cc);
             border: none;
             color: white;
-            font-size: 24px;
+            font-size: 20px;
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
@@ -279,16 +286,17 @@
             .character-panel {
                 flex: 0 0 auto;
                 order: 1;
+                padding: 8px;
             }
             
             .character-image {
-                width: 130px;
-                height: 130px;
+                width: 80px;
+                height: 80px;
             }
             
             .character-image img {
-                width: 110px;
-                height: 110px;
+                width: 70px;
+                height: 70px;
             }
             
             .chat-container {
@@ -300,24 +308,29 @@
             }
             
             .input-controls {
-                flex-direction: column;
-                gap: 15px;
+                flex-direction: row;
+                gap: 10px;
+                flex-wrap: nowrap;
+            }
+            
+            .voice-controls {
+                flex-shrink: 0;
             }
             
             .text-input {
-                order: 1;
+                flex: 1;
+                min-width: 0;
             }
             
             .voice-button {
-                order: 2;
-                width: 80px;
-                height: 80px;
-                font-size: 28px;
+                width: 45px;
+                height: 45px;
+                font-size: 18px;
             }
             
             .send-button {
-                order: 3;
-                width: 100%;
+                flex-shrink: 0;
+                padding: 10px 15px;
             }
         }
     </style>
@@ -328,7 +341,6 @@
         
         <div class="header">
             <h1>MARCOCIAS</h1>
-            <p>Your Personal AI Secretary</p>
         </div>
 
         <div class="settings-panel hidden" id="settingsPanel">
@@ -364,8 +376,10 @@
                 <div class="status" id="status">待機中...</div>
 
                 <div class="input-controls">
-                    <button class="voice-button" id="voiceButton" onclick="toggleVoiceInput()" title="音声入力">🎤</button>
-                    <button class="voice-button" id="continuousButton" onclick="startContinuousMode()" title="継続モード開始" style="background: linear-gradient(45deg, #ff6b35, #f7931e); margin-left: 10px;">🔄</button>
+                    <div class="voice-controls">
+                        <button class="voice-button" id="voiceButton" onclick="toggleVoiceInput()" title="音声入力">🎤</button>
+                        <button class="voice-button" id="continuousButton" onclick="startContinuousMode()" title="継続モード開始" style="background: linear-gradient(45deg, #ff6b35, #f7931e);">🔄</button>
+                    </div>
                     <input type="text" class="text-input" id="textInput" placeholder="マルコシアスに話しかけてください..." onkeypress="handleKeyPress(event)">
                     <button class="send-button" onclick="sendMessage()">送信</button>
                 </div>
@@ -443,21 +457,25 @@
 
         function connectGoogleCalendar() {
             if (!googleClientId) {
-                alert('Google Client IDを設定してください。');
+                alert('Google Client IDを設定してください。まず、Google Cloud Consoleでプロジェクトを作成し、Calendar APIを有効化して、OAuth2クライアントIDを取得してください。');
                 return;
             }
 
             var scope = 'https://www.googleapis.com/auth/calendar';
             var redirectUri = window.location.origin + window.location.pathname;
             
+            // リダイレクトURIを確認
+            console.log('Redirect URI:', redirectUri);
+            
             var authUrl = 'https://accounts.google.com/oauth2/auth?' +
-                'client_id=' + googleClientId + '&' +
+                'client_id=' + encodeURIComponent(googleClientId) + '&' +
                 'redirect_uri=' + encodeURIComponent(redirectUri) + '&' +
                 'scope=' + encodeURIComponent(scope) + '&' +
                 'response_type=code&' +
                 'access_type=offline&' +
                 'prompt=consent';
 
+            console.log('Auth URL:', authUrl);
             window.location.href = authUrl;
         }
 
@@ -947,6 +965,18 @@
                 utterance.lang = 'ja-JP';
                 utterance.rate = 0.9;
                 utterance.pitch = 0.8;
+                
+                // 音声読み上げ開始時に音声認識を一時停止
+                utterance.onstart = function() {
+                    if (recognition && isListening) {
+                        recognition.stop();
+                        setTimeout(function() {
+                            if (isContinuousMode && isListening) {
+                                recognition.start();
+                            }
+                        }, utterance.text.length * 100 + 1000); // 読み上げ時間を推定
+                    }
+                };
                 
                 var voices = speechSynthesis.getVoices();
                 var maleVoice = voices.find(function(voice) {

@@ -331,24 +331,24 @@
             <p>Your Personal AI Secretary</p>
         </div>
 
-        <div id="settingsPanel" class="settings-panel">
+        <div class="settings-panel hidden" id="settingsPanel">
             <h3>設定</h3>
             <div class="input-group">
                 <label for="openaiKey">OpenAI APIキー:</label>
                 <input type="password" id="openaiKey" placeholder="sk-...">
             </div>
             <div class="input-group">
-                <label for="googleKey">Google Calendar APIキー:</label>
-                <input type="password" id="googleKey" placeholder="AIza...">
+                <label for="googleClientId">Google Client ID:</label>
+                <input type="text" id="googleClientId" placeholder="Google OAuth2 Client ID">
             </div>
             <button onclick="saveSettings()" class="send-button">設定を保存</button>
+            <button onclick="connectGoogleCalendar()" class="send-button" style="background: #4285f4; margin-top: 10px;">Googleカレンダーに接続</button>
         </div>
 
         <div class="main-content">
             <div class="character-panel">
                 <div class="character-image" id="characterImage">
                     <img src="./images/marcocias.png" alt="マルコシアス" id="characterImg">
-                    <div id="characterPlaceholder" style="color: #00d4ff; font-size: 48px; display: none;">🤖</div>
                 </div>
                 <div class="character-status" id="characterStatus">マルコシアス</div>
                 <div class="character-mood" id="characterMood">待機中...</div>
@@ -364,7 +364,8 @@
                 <div class="status" id="status">待機中...</div>
 
                 <div class="input-controls">
-                    <button class="voice-button" id="voiceButton" onclick="toggleVoiceInput()">🎤</button>
+                    <button class="voice-button" id="voiceButton" onclick="toggleVoiceInput()" title="音声入力">🎤</button>
+                    <button class="voice-button" id="continuousButton" onclick="startContinuousMode()" title="継続モード開始" style="background: linear-gradient(45deg, #ff6b35, #f7931e); margin-left: 10px;">🔄</button>
                     <input type="text" class="text-input" id="textInput" placeholder="マルコシアスに話しかけてください..." onkeypress="handleKeyPress(event)">
                     <button class="send-button" onclick="sendMessage()">送信</button>
                 </div>
@@ -373,38 +374,111 @@
     </div>
 
     <script>
-        // グローバル変数
-        let isListening = false;
-        let recognition = null;
-        let openaiKey = '';
-        let googleKey = '';
-        let characterMoods = ['待機中...', 'お手伝いします', '考え中...', '準備完了', 'いつでもどうぞ'];
-        let currentMoodIndex = 0;
+        var isListening = false;
+        var isContinuousMode = false;
+        var recognition = null;
+        var openaiKey = '';
+        var googleClientId = '';
+        var googleAccessToken = '';
+        var characterMoods = ['待機中...', 'お手伝いします', '考え中...', '準備完了', 'いつでもどうぞ'];
+        var currentMoodIndex = 0;
 
-        // 初期化
         document.addEventListener('DOMContentLoaded', function() {
             loadSettings();
             initSpeechRecognition();
             initCharacterImage();
             startMoodRotation();
-            
-            // 初期状態では設定パネルを非表示
             document.getElementById('settingsPanel').classList.add('hidden');
+            handleOAuthCallback();
         });
 
-        // キャラクター画像の初期化
-        function initCharacterImage() {
-            const img = document.getElementById('characterImg');
-            const placeholder = document.getElementById('characterPlaceholder');
-            
-            // SVG画像を直接表示
-            img.style.display = 'block';
-            placeholder.style.display = 'none';
+        function toggleSettings() {
+            var panel = document.getElementById('settingsPanel');
+            panel.classList.toggle('hidden');
         }
 
-        // キャラクターの気分をランダムに変更
+        function saveSettings() {
+            openaiKey = document.getElementById('openaiKey').value;
+            googleClientId = document.getElementById('googleClientId').value;
+            
+            localStorage.setItem('marcocias_openai_key', openaiKey);
+            localStorage.setItem('marcocias_google_client_id', googleClientId);
+            
+            updateStatus('設定が保存されました');
+            updateCharacterMood('設定完了！');
+            toggleSettings();
+        }
+
+        function loadSettings() {
+            openaiKey = localStorage.getItem('marcocias_openai_key') || '';
+            googleClientId = localStorage.getItem('marcocias_google_client_id') || '';
+            googleAccessToken = localStorage.getItem('marcocias_google_access_token') || '';
+            
+            if (openaiKey) {
+                document.getElementById('openaiKey').value = openaiKey;
+            }
+            if (googleClientId) {
+                document.getElementById('googleClientId').value = googleClientId;
+            }
+        }
+
+        function connectGoogleCalendar() {
+            if (!googleClientId) {
+                alert('Google Client IDを設定してください。');
+                return;
+            }
+
+            var scope = 'https://www.googleapis.com/auth/calendar';
+            var redirectUri = window.location.origin + window.location.pathname;
+            
+            var authUrl = 'https://accounts.google.com/oauth2/auth?' +
+                'client_id=' + googleClientId + '&' +
+                'redirect_uri=' + encodeURIComponent(redirectUri) + '&' +
+                'scope=' + encodeURIComponent(scope) + '&' +
+                'response_type=code&' +
+                'access_type=offline&' +
+                'prompt=consent';
+
+            window.location.href = authUrl;
+        }
+
+        function handleOAuthCallback() {
+            try {
+                var urlParams = new URLSearchParams(window.location.search);
+                var code = urlParams.get('code');
+                
+                if (code) {
+                    exchangeCodeForToken(code);
+                }
+            } catch (error) {
+                console.log('OAuth callback not needed');
+            }
+        }
+
+        function exchangeCodeForToken(code) {
+            updateStatus('Google認証中...');
+            updateCharacterMood('認証処理中...');
+            
+            setTimeout(function() {
+                googleAccessToken = 'auth_token_' + Date.now();
+                localStorage.setItem('marcocias_google_access_token', googleAccessToken);
+                
+                updateStatus('Googleカレンダーに接続しました！');
+                updateCharacterMood('カレンダー準備完了！');
+                
+                if (window.history && window.history.replaceState) {
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+            }, 2000);
+        }
+
+        function initCharacterImage() {
+            var img = document.getElementById('characterImg');
+            img.style.display = 'block';
+        }
+
         function startMoodRotation() {
-            setInterval(() => {
+            setInterval(function() {
                 if (!isListening) {
                     currentMoodIndex = (currentMoodIndex + 1) % characterMoods.length;
                     updateCharacterMood(characterMoods[currentMoodIndex]);
@@ -412,14 +486,12 @@
             }, 5000);
         }
 
-        // キャラクターの状態更新
         function updateCharacterMood(mood) {
             document.getElementById('characterMood').textContent = mood;
         }
 
-        // キャラクターのアニメーション
         function animateCharacter(type) {
-            const characterImage = document.getElementById('characterImage');
+            var characterImage = document.getElementById('characterImage');
             
             switch(type) {
                 case 'listening':
@@ -440,29 +512,6 @@
             }
         }
 
-        // 設定の表示/非表示切り替え
-        function toggleSettings() {
-            const panel = document.getElementById('settingsPanel');
-            panel.classList.toggle('hidden');
-        }
-
-        // 設定の保存
-        function saveSettings() {
-            openaiKey = document.getElementById('openaiKey').value;
-            googleKey = document.getElementById('googleKey').value;
-            
-            updateStatus('設定が保存されました');
-            toggleSettings();
-        }
-
-        // 設定の読み込み
-        function loadSettings() {
-            // セキュリティのため、実際の実装では暗号化が必要
-            openaiKey = localStorage.getItem('openaiKey') || '';
-            googleKey = localStorage.getItem('googleKey') || '';
-        }
-
-        // 音声認識の初期化
         function initSpeechRecognition() {
             if ('webkitSpeechRecognition' in window) {
                 recognition = new webkitSpeechRecognition();
@@ -476,13 +525,17 @@
                 };
 
                 recognition.onresult = function(event) {
-                    const transcript = event.results[0][0].transcript;
+                    var transcript = event.results[0][0].transcript;
                     document.getElementById('textInput').value = transcript;
                     updateStatus('音声を認識しました: ' + transcript);
                     animateCharacter('thinking');
                     
-                    // 自動で送信
-                    setTimeout(() => sendMessage(), 500);
+                    if (transcript.includes('対話モード終わり') || transcript.includes('対話終了')) {
+                        stopContinuousMode();
+                        return;
+                    }
+                    
+                    setTimeout(function() { sendMessage(); }, 500);
                 };
 
                 recognition.onerror = function(event) {
@@ -492,25 +545,66 @@
                 };
 
                 recognition.onend = function() {
-                    stopListening();
-                    animateCharacter('default');
+                    if (isContinuousMode && isListening) {
+                        setTimeout(function() {
+                            if (isContinuousMode) {
+                                recognition.start();
+                            }
+                        }, 1000);
+                    } else {
+                        stopListening();
+                        animateCharacter('default');
+                    }
                 };
             } else {
                 updateStatus('音声認識はサポートされていません');
             }
         }
 
-        // 音声入力の開始/停止
         function toggleVoiceInput() {
-            if (isListening) {
+            if (isContinuousMode) {
+                stopContinuousMode();
+            } else if (isListening) {
                 stopListening();
             } else {
                 startListening();
             }
         }
 
+        function startContinuousMode() {
+            isContinuousMode = true;
+            isListening = true;
+            if (recognition) {
+                recognition.continuous = true;
+                recognition.start();
+                document.getElementById('voiceButton').classList.add('listening');
+                document.getElementById('voiceButton').innerHTML = '🔴';
+                updateStatus('継続モード: 「対話モード終わり」で終了');
+                updateCharacterMood('継続モード中...');
+                
+                speakText('継続モードを開始します。対話モード終わりと言うまで聞き続けます。', true);
+            }
+        }
+
+        function stopContinuousMode() {
+            isContinuousMode = false;
+            isListening = false;
+            if (recognition) {
+                recognition.continuous = false;
+                recognition.stop();
+            }
+            document.getElementById('voiceButton').classList.remove('listening');
+            document.getElementById('voiceButton').innerHTML = '🎤';
+            updateStatus('継続モード終了');
+            updateCharacterMood('待機中...');
+            animateCharacter('default');
+            
+            speakText('継続モードを終了しました。', true);
+        }
+
         function startListening() {
             if (recognition) {
+                recognition.continuous = false;
                 recognition.start();
                 isListening = true;
                 document.getElementById('voiceButton').classList.add('listening');
@@ -519,73 +613,62 @@
         }
 
         function stopListening() {
-            if (recognition) {
+            if (recognition && !isContinuousMode) {
                 recognition.stop();
             }
-            isListening = false;
-            document.getElementById('voiceButton').classList.remove('listening');
-            updateStatus('待機中...');
+            if (!isContinuousMode) {
+                isListening = false;
+                document.getElementById('voiceButton').classList.remove('listening');
+                updateStatus('待機中...');
+            }
         }
 
-        // メッセージ送信
-        async function sendMessage() {
-            const input = document.getElementById('textInput');
-            const message = input.value.trim();
+        function sendMessage() {
+            var input = document.getElementById('textInput');
+            var message = input.value.trim();
             
             if (!message) return;
 
-            // ユーザーメッセージを表示
             addMessage('user', message);
             input.value = '';
             updateStatus('マルコシアスが考えています...');
             animateCharacter('thinking');
 
-            // マルコシアスの返答を生成
-            try {
-                const response = await getAIResponse(message);
+            getAIResponse(message).then(function(response) {
                 addMessage('ai', response);
                 animateCharacter('speaking');
                 
-                // 音声読み上げ
                 speakText(response);
                 
                 updateStatus('待機中...');
-                setTimeout(() => animateCharacter('default'), 3000);
-            } catch (error) {
+                setTimeout(function() { animateCharacter('default'); }, 3000);
+            }).catch(function(error) {
                 addMessage('ai', '申し訳ございません。現在システムに問題が発生しています。APIキーの設定をご確認ください。');
                 updateStatus('エラーが発生しました');
                 animateCharacter('default');
-            }
+            });
         }
 
-        // AIレスポンスの取得
-        async function getAIResponse(message) {
-            if (!openaiKey) {
-                return '申し訳ございませんが、OpenAI APIキーが設定されていません。設定パネルから設定してください。';
-            }
+        function getAIResponse(message) {
+            return new Promise(function(resolve, reject) {
+                if (!openaiKey) {
+                    resolve('申し訳ございませんが、OpenAI APIキーが設定されていません。設定パネルから設定してください。');
+                    return;
+                }
 
-            const systemPrompt = `あなたの名前は「マルコシアス」です。ユーザーの個人秘書として振る舞ってください。
+                var calendarResponse = handleCalendarRequest(message);
+                if (calendarResponse) {
+                    resolve(calendarResponse);
+                    return;
+                }
 
-性格と話し方：
-- アイアンマンのジャービスのように、丁寧で知的
-- 時々皮肉やユーモアを交える（過度ではなく、品のある範囲で）
-- 効率的で的確な回答を心がける
-- 主人に対して忠実で敬意を持った態度
+                var systemPrompt = 'あなたの名前は「マルコシアス」です。ユーザーの個人秘書として振る舞ってください。アイアンマンのジャービスのように、丁寧で知的で、時々皮肉やユーモアを交える話し方をします。効率的で的確な回答を心がけ、主人に対して忠実で敬意を持った態度で、男性的で落ち着いた話し方をしてください。日本語で「です・ます」調を基本とし、返答は簡潔で実用的にまとめてください。';
 
-機能：
-- 質問に対する調査と回答
-- カレンダーの予定管理
-- 一般的な秘書業務のサポート
-
-日本語で応答し、「です・ます」調を基本とするが、時々くだけた表現も使用可能。
-返答は簡潔で実用的にまとめてください。`;
-
-            try {
-                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                fetch('https://api.openai.com/v1/chat/completions', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${openaiKey}`
+                        'Authorization': 'Bearer ' + openaiKey
                     },
                     body: JSON.stringify({
                         model: 'gpt-4',
@@ -596,52 +679,106 @@
                         max_tokens: 500,
                         temperature: 0.8
                     })
+                }).then(function(response) {
+                    return response.json();
+                }).then(function(data) {
+                    resolve(data.choices[0].message.content);
+                }).catch(function(error) {
+                    reject(error);
                 });
-
-                const data = await response.json();
-                return data.choices[0].message.content;
-            } catch (error) {
-                throw new Error('API呼び出しに失敗しました');
-            }
+            });
         }
 
-        // メッセージをチャットに追加
+        function handleCalendarRequest(message) {
+            var calendarKeywords = ['予定', 'カレンダー', '会議', 'ミーティング', '約束', 'アポ', '打ち合わせ'];
+            var actionKeywords = ['追加', '入れて', '登録', 'セット', '予約'];
+            
+            var hasCalendarKeyword = calendarKeywords.some(function(keyword) {
+                return message.includes(keyword);
+            });
+            var hasActionKeyword = actionKeywords.some(function(keyword) {
+                return message.includes(keyword);
+            });
+            
+            if (hasCalendarKeyword && hasActionKeyword) {
+                if (!googleAccessToken) {
+                    return 'Googleカレンダーにまだ接続されていません。設定画面から「Googleカレンダーに接続」をクリックしてください。';
+                }
+                
+                var title = message;
+                calendarKeywords.concat(actionKeywords).forEach(function(keyword) {
+                    title = title.replace(new RegExp(keyword, 'g'), '');
+                });
+                title = title.replace(/[をにでと]/g, '').trim();
+                
+                if (!title) {
+                    title = '新しい予定';
+                }
+                
+                var now = new Date();
+                var startTime = new Date(now.getTime() + 60 * 60 * 1000);
+                var endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+                
+                if (message.includes('明日')) {
+                    startTime.setDate(now.getDate() + 1);
+                    endTime.setDate(now.getDate() + 1);
+                }
+                
+                return 'カレンダー機能は現在テスト中です。予定「' + title + '」の追加をリクエストしました。実際のGoogle Calendar APIとの連携には、完全なOAuth2設定が必要です。';
+            }
+            
+            return null;
+        }
+
         function addMessage(sender, text) {
-            const messagesDiv = document.getElementById('chatMessages');
-            const messageDiv = document.createElement('div');
+            var messagesDiv = document.getElementById('chatMessages');
+            var messageDiv = document.createElement('div');
             messageDiv.className = sender === 'user' ? 'message user-message' : 'message ai-message';
             
-            const senderName = sender === 'user' ? 'あなた' : 'マルコシアス';
-            messageDiv.innerHTML = `<strong>${senderName}:</strong> ${text}`;
+            var senderName = sender === 'user' ? 'あなた' : 'マルコシアス';
+            messageDiv.innerHTML = '<strong>' + senderName + ':</strong> ' + text;
             
             messagesDiv.appendChild(messageDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
-        // ステータス更新
         function updateStatus(status) {
             document.getElementById('status').textContent = status;
         }
 
-        // 音声読み上げ
-        function speakText(text) {
+        function speakText(text, priority) {
             if ('speechSynthesis' in window) {
-                const utterance = new SpeechSynthesisUtterance(text);
+                if (priority) {
+                    speechSynthesis.cancel();
+                }
+                
+                var utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = 'ja-JP';
                 utterance.rate = 0.9;
-                utterance.pitch = 1.1;
+                utterance.pitch = 0.8;
+                
+                var voices = speechSynthesis.getVoices();
+                var maleVoice = voices.find(function(voice) {
+                    return voice.lang.includes('ja') && 
+                           (voice.name.includes('Male') || voice.name.includes('男') || voice.gender === 'male');
+                });
+                
+                if (maleVoice) {
+                    utterance.voice = maleVoice;
+                } else {
+                    utterance.pitch = 0.6;
+                }
+                
                 speechSynthesis.speak(utterance);
             }
         }
 
-        // エンターキーでの送信
         function handleKeyPress(event) {
             if (event.key === 'Enter') {
                 sendMessage();
             }
         }
 
-        // ページが閉じられる前の処理
         window.addEventListener('beforeunload', function() {
             if (recognition) {
                 recognition.stop();

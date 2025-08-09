@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>マルコシアス - AI秘書</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
+            color: #00d4ff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            color: #00d4ff;
+            text-shadow: 0 0 20px #00d4ff;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #888;
+            font-style: italic;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 20px #00d4ff; }
+            to { text-shadow: 0 0 30px #00d4ff, 0 0 40px #0099cc; }
+        }
+
+        .settings-panel {
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid #00d4ff;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .settings-panel h3 {
+            margin-bottom: 15px;
+            color: #00d4ff;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #ccc;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #00d4ff;
+            border-radius: 5px;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .main-content {
+            display: flex;
+            gap: 20px;
+            flex: 1;
+        }
+
+        .character-panel {
+            flex: 0 0 300px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid #00d4ff;
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .character-image {
+            width: 200px;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            border: 2px solid #00d4ff;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .character-image img {
+            width: 180px;
+            height: 180px;
+            object-fit: contain;
+            border-radius: 50%;
+        }
+
+        .character-status {
+            color: #00d4ff;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .character-mood {
+            color: #888;
+            font-style: italic;
+        }
+
+        .chat-container {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid #00d4ff;
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            min-height: 400px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            padding: 10px;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            border-radius: 10px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .user-message {
+            background: rgba(0, 212, 255, 0.2);
+            border-left: 3px solid #00d4ff;
+            margin-left: 20%;
+        }
+
+        .ai-message {
+            background: rgba(255, 255, 255, 0.1);
+            border-left: 3px solid #888;
+            margin-right: 20%;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .input-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .voice-button {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #00d4ff, #0099cc);
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+        }
+
+        .voice-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(0, 212, 255, 0.5);
+        }
+
+        .voice-button.listening {
+            background: linear-gradient(45deg, #ff4444, #cc0000);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .text-input {
+            flex: 1;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #00d4ff;
+            border-radius: 25px;
+            color: #fff;
+            font-size: 16px;
+        }
+
+        .send-button {
+            padding: 15px 25px;
+            background: linear-gradient(45deg, #00d4ff, #0099cc);
+            border: none;
+            border-radius: 25px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .send-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.4);
+        }
+
+        .status {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 14px;
+            color: #888;
+        }
+
+        .toggle-settings {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 212, 255, 0.8);
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            color: white;
+            cursor: pointer;
+            font-size: 18px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            .character-panel {
+                flex: 0 0 auto;
+                order: 1;
+            }
+            
+            .character-image {
+                width: 150px;
+                height: 150px;
+            }
+            
+            .character-image img {
+                width: 130px;
+                height: 130px;
+            }
+            
+            .chat-container {
+                order: 2;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .input-controls {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .text-input {
+                order: 1;
+            }
+            
+            .voice-button {
+                order: 2;
+                width: 80px;
+                height: 80px;
+                font-size: 28px;
+            }
+            
+            .send-button {
+                order: 3;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <button class="toggle-settings" onclick="toggleSettings()">⚙️</button>
+        
+        <div class="header">
+            <h1>MARCOCIAS</h1>
+            <p>Your Personal AI Secretary</p>
+        </div>
+
+        <div id="settingsPanel" class="settings-panel">
+            <h3>設定</h3>
+            <div class="input-group">
+                <label for="openaiKey">OpenAI APIキー:</label>
+                <input type="password" id="openaiKey" placeholder="sk-...">
+            </div>
+            <div class="input-group">
+                <label for="googleKey">Google Calendar APIキー:</label>
+                <input type="password" id="googleKey" placeholder="AIza...">
+            </div>
+            <button onclick="saveSettings()" class="send-button">設定を保存</button>
+        </div>
+
+        <div class="main-content">
+            <div class="character-panel">
+                <div class="character-image" id="characterImage">
+                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==" alt="マルコシアス" id="characterImg" style="display: none;">
+                    <div id="characterPlaceholder" style="color: #00d4ff; font-size: 48px;">🤖</div>
+                </div>
+                <div class="character-status" id="characterStatus">マルコシアス</div>
+                <div class="character-mood" id="characterMood">待機中...</div>
+            </div>
+
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="ai-message">
+                        <strong>マルコシアス:</strong> こんにちは。私はマルコシアス、あなたの個人秘書です。何かお手伝いできることはありますか？
+                    </div>
+                </div>
+
+                <div class="status" id="status">待機中...</div>
+
+                <div class="input-controls">
+                    <button class="voice-button" id="voiceButton" onclick="toggleVoiceInput()">🎤</button>
+                    <input type="text" class="text-input" id="textInput" placeholder="マルコシアスに話しかけてください..." onkeypress="handleKeyPress(event)">
+                    <button class="send-button" onclick="sendMessage()">送信</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // グローバル変数
+        let isListening = false;
+        let recognition = null;
+        let openaiKey = '';
+        let googleKey = '';
+        let characterMoods = ['待機中...', 'お手伝いします', '考え中...', '準備完了', 'いつでもどうぞ'];
+        let currentMoodIndex = 0;
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSettings();
+            initSpeechRecognition();
+            initCharacterImage();
+            startMoodRotation();
+            
+            // 初期状態では設定パネルを非表示
+            document.getElementById('settingsPanel').classList.add('hidden');
+        });
+
+        // キャラクター画像の初期化
+        function initCharacterImage() {
+            const img = document.getElementById('characterImg');
+            const placeholder = document.getElementById('characterPlaceholder');
+            
+            // 画像が読み込まれた場合の処理
+            img.onload = function() {
+                placeholder.style.display = 'none';
+                img.style.display = 'block';
+            };
+            
+            // プレースホルダーとして可愛い絵文字を使用
+            setTimeout(() => {
+                placeholder.innerHTML = '🐾';
+            }, 1000);
+        }
+
+        // キャラクターの気分をランダムに変更
+        function startMoodRotation() {
+            setInterval(() => {
+                if (!isListening) {
+                    currentMoodIndex = (currentMoodIndex + 1) % characterMoods.length;
+                    updateCharacterMood(characterMoods[currentMoodIndex]);
+                }
+            }, 5000);
+        }
+
+        // キャラクターの状態更新
+        function updateCharacterMood(mood) {
+            document.getElementById('characterMood').textContent = mood;
+        }
+
+        // キャラクターのアニメーション
+        function animateCharacter(type) {
+            const characterImage = document.getElementById('characterImage');
+            
+            switch(type) {
+                case 'listening':
+                    characterImage.style.animation = 'pulse 1s infinite';
+                    updateCharacterMood('聞いています...');
+                    break;
+                case 'thinking':
+                    characterImage.style.animation = 'float 1s ease-in-out infinite';
+                    updateCharacterMood('考えています...');
+                    break;
+                case 'speaking':
+                    characterImage.style.animation = 'glow 1s ease-in-out infinite';
+                    updateCharacterMood('お答えします');
+                    break;
+                default:
+                    characterImage.style.animation = 'float 3s ease-in-out infinite';
+                    updateCharacterMood('待機中...');
+            }
+        }
+
+        // 設定の表示/非表示切り替え
+        function toggleSettings() {
+            const panel = document.getElementById('settingsPanel');
+            panel.classList.toggle('hidden');
+        }
+
+        // 設定の保存
+        function saveSettings() {
+            openaiKey = document.getElementById('openaiKey').value;
+            googleKey = document.getElementById('googleKey').value;
+            
+            updateStatus('設定が保存されました');
+            toggleSettings();
+        }
+
+        // 設定の読み込み
+        function loadSettings() {
+            // セキュリティのため、実際の実装では暗号化が必要
+            openaiKey = localStorage.getItem('openaiKey') || '';
+            googleKey = localStorage.getItem('googleKey') || '';
+        }
+
+        // 音声認識の初期化
+        function initSpeechRecognition() {
+            if ('webkitSpeechRecognition' in window) {
+                recognition = new webkitSpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = 'ja-JP';
+
+                recognition.onstart = function() {
+                    updateStatus('音声を聞いています...');
+                    animateCharacter('listening');
+                };
+
+                recognition.onresult = function(event) {
+                    const transcript = event.results[0][0].transcript;
+                    document.getElementById('textInput').value = transcript;
+                    updateStatus('音声を認識しました: ' + transcript);
+                    animateCharacter('thinking');
+                    
+                    // 自動で送信
+                    setTimeout(() => sendMessage(), 500);
+                };
+
+                recognition.onerror = function(event) {
+                    updateStatus('音声認識エラー: ' + event.error);
+                    animateCharacter('default');
+                    stopListening();
+                };
+
+                recognition.onend = function() {
+                    stopListening();
+                    animateCharacter('default');
+                };
+            } else {
+                updateStatus('音声認識はサポートされていません');
+            }
+        }
+
+        // 音声入力の開始/停止
+        function toggleVoiceInput() {
+            if (isListening) {
+                stopListening();
+            } else {
+                startListening();
+            }
+        }
+
+        function startListening() {
+            if (recognition) {
+                recognition.start();
+                isListening = true;
+                document.getElementById('voiceButton').classList.add('listening');
+                updateStatus('「マルコシアス」と呼んでください...');
+            }
+        }
+
+        function stopListening() {
+            if (recognition) {
+                recognition.stop();
+            }
+            isListening = false;
+            document.getElementById('voiceButton').classList.remove('listening');
+            updateStatus('待機中...');
+        }
+
+        // メッセージ送信
+        async function sendMessage() {
+            const input = document.getElementById('textInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+
+            // ユーザーメッセージを表示
+            addMessage('user', message);
+            input.value = '';
+            updateStatus('マルコシアスが考えています...');
+            animateCharacter('thinking');
+
+            // マルコシアスの返答を生成
+            try {
+                const response = await getAIResponse(message);
+                addMessage('ai', response);
+                animateCharacter('speaking');
+                
+                // 音声読み上げ
+                speakText(response);
+                
+                updateStatus('待機中...');
+                setTimeout(() => animateCharacter('default'), 3000);
+            } catch (error) {
+                addMessage('ai', '申し訳ございません。現在システムに問題が発生しています。APIキーの設定をご確認ください。');
+                updateStatus('エラーが発生しました');
+                animateCharacter('default');
+            }
+        }
+
+        // AIレスポンスの取得
+        async function getAIResponse(message) {
+            if (!openaiKey) {
+                return '申し訳ございませんが、OpenAI APIキーが設定されていません。設定パネルから設定してください。';
+            }
+
+            const systemPrompt = `あなたの名前は「マルコシアス」です。ユーザーの個人秘書として振る舞ってください。
+
+性格と話し方：
+- アイアンマンのジャービスのように、丁寧で知的
+- 時々皮肉やユーモアを交える（過度ではなく、品のある範囲で）
+- 効率的で的確な回答を心がける
+- 主人に対して忠実で敬意を持った態度
+
+機能：
+- 質問に対する調査と回答
+- カレンダーの予定管理
+- 一般的な秘書業務のサポート
+
+日本語で応答し、「です・ます」調を基本とするが、時々くだけた表現も使用可能。
+返答は簡潔で実用的にまとめてください。`;
+
+            try {
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${openaiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: 'gpt-4',
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: message }
+                        ],
+                        max_tokens: 500,
+                        temperature: 0.8
+                    })
+                });
+
+                const data = await response.json();
+                return data.choices[0].message.content;
+            } catch (error) {
+                throw new Error('API呼び出しに失敗しました');
+            }
+        }
+
+        // メッセージをチャットに追加
+        function addMessage(sender, text) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = sender === 'user' ? 'message user-message' : 'message ai-message';
+            
+            const senderName = sender === 'user' ? 'あなた' : 'マルコシアス';
+            messageDiv.innerHTML = `<strong>${senderName}:</strong> ${text}`;
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // ステータス更新
+        function updateStatus(status) {
+            document.getElementById('status').textContent = status;
+        }
+
+        // 音声読み上げ
+        function speakText(text) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ja-JP';
+                utterance.rate = 0.9;
+                utterance.pitch = 1.1;
+                speechSynthesis.speak(utterance);
+            }
+        }
+
+        // エンターキーでの送信
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        // ページが閉じられる前の処理
+        window.addEventListener('beforeunload', function() {
+            if (recognition) {
+                recognition.stop();
+            }
+        });
+    </script>
+</body>
+</html>

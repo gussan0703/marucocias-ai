@@ -902,6 +902,10 @@
                     return;
                 }
 
+                // まず受理メッセージを表示
+                addMessage('ai', '受理されました。');
+                updateStatus('カレンダーに予定を追加中...');
+
                 fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
                     method: 'POST',
                     headers: {
@@ -934,10 +938,14 @@
                     }
                 }).then(function(result) {
                     var eventTime = new Date(eventDetails.startTime).toLocaleString('ja-JP');
-                    resolve('🎉 Googleカレンダーに予定「' + eventDetails.title + '」を追加しました！\n\n' +
+                    
+                    // 成功時の格調高いメッセージ
+                    var successMessage = '🎉 Googleカレンダーに予定「' + eventDetails.title + '」を追加いたしました。\n\n' +
                            '📅 日時: ' + eventTime + '\n' +
                            '🔗 イベントID: ' + result.id.substring(0, 8) + '...\n\n' +
-                           'Googleカレンダーアプリでご確認ください！');
+                           'ノブレス・オブリージュ。***今後も救世主たらんことを***';
+                    
+                    resolve(successMessage);
                 }).catch(function(error) {
                     resolve('❌ カレンダーの追加に失敗しました。\n' +
                            'エラー: ' + error.message + '\n\n' +

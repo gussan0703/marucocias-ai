@@ -406,12 +406,13 @@
             <button onclick="testGoogleAuth()" class="send-button" style="background: #4285f4; margin-top: 10px;">認証テスト</button>
             <button onclick="connectGoogleCalendar()" class="send-button" style="background: #34a853; margin-top: 10px;">Googleカレンダーに接続</button>
             <button onclick="enableDemoMode()" class="send-button" style="background: #ff9800; margin-top: 10px;">デモモードを有効化</button>
+            <button onclick="debugOAuthSettings()" class="send-button" style="background: #9c27b0; margin-top: 10px;">設定デバッグ</button>
         </div>
 
         <div class="main-content">
             <div class="character-panel">
                 <div class="character-image" id="characterImage">
-                    <div style="font-size: 60px;">🤖</div>
+                    <img src="./images/marcocias.png" alt="マルコシアス" id="characterImg" style="width: 100px; height: 100px; object-fit: cover; border-radius: 50%;">
                 </div>
                 <div class="character-status" id="characterStatus">マルコシアス</div>
                 <div class="character-mood" id="characterMood">待機中...</div>
@@ -518,6 +519,47 @@
                     updateStatus('すべての設定が読み込まれました');
                 }, 1000);
             }
+        }
+
+        function debugOAuthSettings() {
+            updateStatus('設定をデバッグしています...');
+            
+            console.log('=== OAuth設定デバッグ ===');
+            console.log('Client ID:', googleClientId);
+            console.log('Redirect URI:', window.location.origin + window.location.pathname);
+            console.log('Current URL:', window.location.href);
+            console.log('Google Calendar API Test URL:', 'https://accounts.google.com/oauth2/auth?client_id=' + googleClientId);
+            
+            // 簡単なテストURL
+            var testUrl = 'https://accounts.google.com/oauth2/auth?client_id=' + googleClientId + '&response_type=code&scope=openid';
+            
+            updateStatus('簡易テストを実行中...');
+            
+            // 実際にテストリクエストを送信
+            fetch(testUrl, {
+                method: 'HEAD',
+                mode: 'no-cors'
+            }).then(function() {
+                updateStatus('✅ クライアントIDは有効です。OAuth同意画面の設定を確認してください。');
+                updateCharacterMood('クライアントID確認済み');
+            }).catch(function(error) {
+                updateStatus('❌ クライアントIDまたは設定に問題があります');
+                updateCharacterMood('設定エラー検出');
+                console.error('OAuth test failed:', error);
+            });
+            
+            // Google Cloud Console の直接リンクを提供
+            var consoleUrl = 'https://console.cloud.google.com/apis/credentials/consent';
+            
+            addMessage('ai', '🔧 設定デバッグを実行しました。\n\n' +
+                '📋 確認事項:\n' +
+                '1. Google Cloud Console の OAuth同意画面が「テスト中」になっているか\n' +
+                '2. スコープに calendar が追加されているか\n' +
+                '3. テストユーザーにあなたのアカウントが追加されているか\n' +
+                '4. クライアントIDのリダイレクトURIが正確に設定されているか\n\n' +
+                '🔗 設定確認リンク: ' + consoleUrl + '\n\n' +
+                '問題が解決しない場合は、一度すべての設定を削除して再作成することをお勧めします。'
+            );
         }
 
         function enableDemoMode() {

@@ -688,9 +688,16 @@
                             googleAccessToken = response.access_token;
                             localStorage.setItem('marcocias_google_access_token', googleAccessToken);
                             
+                            // デモモードを無効化
+                            isDemoMode = false;
+                            localStorage.setItem('marcocias_demo_mode', 'false');
+                            
                             updateStatus('Googleカレンダーに接続しました！');
                             updateCharacterMood('カレンダー準備完了！');
                             speakText('Googleカレンダーに接続しました。予定の追加が可能です。', true);
+                            
+                            // 成功メッセージを表示
+                            addMessage('ai', '🎉 Googleカレンダーとの認証が完了しました！\n\n✅ 実際のGoogleカレンダーに予定を追加できます\n✅ 「明日の14時に会議を追加して」などと話しかけてください');
                             
                             // 接続テスト
                             testCalendarConnection();
@@ -1225,7 +1232,13 @@
 
         function addToGoogleCalendar(eventDetails) {
             return new Promise(function(resolve) {
-                if (isDemoMode || !googleAccessToken || googleAccessToken.startsWith('demo_token_')) {
+                // デモモードかどうかの確認（厳密にチェック）
+                var isRealAuth = googleAccessToken && 
+                               !googleAccessToken.startsWith('demo_token_') && 
+                               !isDemoMode && 
+                               googleAccessToken.startsWith('ya29.');
+                
+                if (!isRealAuth) {
                     // デモモード
                     var eventTime = new Date(eventDetails.startTime).toLocaleString('ja-JP', {
                         year: 'numeric',
@@ -1241,6 +1254,9 @@
                     return;
                 }
 
+                console.log('実際のGoogle Calendar APIを呼び出し中...');
+                console.log('Access Token:', googleAccessToken.substring(0, 20) + '...');
+                
                 // 実際のGoogle Calendar API呼び出し
                 fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
                     method: 'POST',
@@ -1267,17 +1283,25 @@
                         }
                     })
                 }).then(function(response) {
+                    console.log('API Response Status:', response.status);
                     if (response.ok) {
                         return response.json();
                     } else {
-                        throw new Error('API Error: ' + response.status);
+                        throw new Error('API Error: ' + response.status + ' ' + response.statusText);
                     }
                 }).then(function(result) {
+                    console.log('カレンダー追加成功:', result);
                     var eventTime = new Date(eventDetails.startTime).toLocaleString('ja-JP');
-                    resolve('✅ カレンダーに予定「' + eventDetails.title + '」を正常に追加しました。\n日時: ' + eventTime);
+                    resolve('🎉 **実際のGoogleカレンダーに予定を追加しました！**\n\n' +
+                           '📅 タイトル: 「' + eventDetails.title + '」\n' +
+                           '🕐 日時: ' + eventTime + '\n' +
+                           '🔗 イベントID: ' + result.id + '\n\n' +
+                           'Googleカレンダーアプリでご確認ください！');
                 }).catch(function(error) {
                     console.error('Calendar API Error:', error);
-                    resolve('❌ カレンダーの追加に失敗しました。認証を更新してください。\nエラー: ' + error.message);
+                    resolve('❌ カレンダーの追加に失敗しました。\n' +
+                           'エラー: ' + error.message + '\n\n' +
+                           '認証を更新するか、デモモードをお試しください。');
                 });
             });
         }

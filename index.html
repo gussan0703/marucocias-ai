@@ -404,10 +404,7 @@
             </div>
             
             <button onclick="saveSettings()" class="send-button">設定を保存</button>
-            <button onclick="testGoogleAuth()" class="send-button" style="background: #4285f4; margin-top: 10px;">認証テスト</button>
             <button onclick="connectGoogleCalendar()" class="send-button" style="background: #34a853; margin-top: 10px;">Googleカレンダーに接続</button>
-            <button onclick="enableDemoMode()" class="send-button" style="background: #ff9800; margin-top: 10px;">デモモードを有効化</button>
-            <button onclick="debugOAuthSettings()" class="send-button" style="background: #9c27b0; margin-top: 10px;">設定デバッグ</button>
         </div>
 
         <div class="main-content">
@@ -450,8 +447,6 @@
         var characterMoods = ['待機中...', 'お手伝いします', '考え中...', '準備完了', 'いつでもどうぞ'];
         var currentMoodIndex = 0;
         var isSpeaking = false;
-        var speechTimeout = null;
-        var isDemoMode = false;
 
         document.addEventListener('DOMContentLoaded', function() {
             loadSettings();
@@ -497,7 +492,6 @@
             openaiKey = localStorage.getItem('marcocias_openai_key') || '';
             googleClientId = localStorage.getItem('marcocias_google_client_id') || '';
             googleAccessToken = localStorage.getItem('marcocias_google_access_token') || '';
-            isDemoMode = localStorage.getItem('marcocias_demo_mode') === 'true';
             
             if (openaiKey) {
                 document.getElementById('openaiKey').value = openaiKey;
@@ -507,11 +501,8 @@
                 document.getElementById('googleClientId').value = googleClientId;
             }
             
-            if (googleAccessToken || isDemoMode) {
+            if (googleAccessToken) {
                 updateCharacterMood('カレンダー接続済み');
-                if (isDemoMode) {
-                    showDemoNotice();
-                }
             }
             
             if (openaiKey && googleClientId) {
@@ -521,42 +512,7 @@
             }
         }
 
-        function debugOAuthSettings() {
-            updateStatus('設定をデバッグしています...');
-            
-            console.log('=== OAuth設定デバッグ ===');
-            console.log('Client ID:', googleClientId);
-            console.log('Redirect URI:', window.location.origin + window.location.pathname);
-            console.log('Current URL:', window.location.href);
-            console.log('Google Calendar API Test URL:', 'https://accounts.google.com/oauth2/auth?client_id=' + googleClientId);
-            
-            // 簡単なテストURL
-            var testUrl = 'https://accounts.google.com/oauth2/auth?client_id=' + googleClientId + '&response_type=code&scope=openid';
-            
-            updateStatus('簡易テストを実行中...');
-            
-            // 実際にテストリクエストを送信
-            fetch(testUrl, {
-                method: 'HEAD',
-                mode: 'no-cors'
-            }).then(function() {
-                updateStatus('✅ クライアントIDは有効です。OAuth同意画面の設定を確認してください。');
-                updateCharacterMood('クライアントID確認済み');
-            }).catch(function(error) {
-                updateStatus('❌ クライアントIDまたは設定に問題があります');
-                updateCharacterMood('設定エラー検出');
-                console.error('OAuth test failed:', error);
-            });
-            
-            // Google Cloud Console の直接リンクを提供
-            var consoleUrl = 'https://console.cloud.google.com/apis/credentials/consent';
-            
-            addMessage('ai', '🔧 設定デバッグを実行しました。\n\n' +
-                '📋 確認事項:\n' +
-                '1. Google Cloud Console の OAuth同意画面が「テスト中」になっているか\n' +
-                '2. スコープに calendar が追加されているか\n' +
-                '3. テストユーザーにあなたのアカウントが追加されているか\n' +
-                '4. クライアントIDのリダイレクトURIが正確に設定されているか\n\n' +
+        // 削除: testGoogleAuth, debugOAuthSettings, enableDemoMode, showDemoNotice, tryAlternativeAuth関数を削除4. クライアントIDのリダイレクトURIが正確に設定されているか\n\n' +
                 '🔗 設定確認リンク: ' + consoleUrl + '\n\n' +
                 '問題が解決しない場合は、一度すべての設定を削除して再作成することをお勧めします。'
             );
@@ -688,18 +644,12 @@
                             googleAccessToken = response.access_token;
                             localStorage.setItem('marcocias_google_access_token', googleAccessToken);
                             
-                            // デモモードを無効化
-                            isDemoMode = false;
-                            localStorage.setItem('marcocias_demo_mode', 'false');
-                            
                             updateStatus('Googleカレンダーに接続しました！');
                             updateCharacterMood('カレンダー準備完了！');
                             speakText('Googleカレンダーに接続しました。予定の追加が可能です。', true);
                             
-                            // 成功メッセージを表示
                             addMessage('ai', '🎉 Googleカレンダーとの認証が完了しました！\n\n✅ 実際のGoogleカレンダーに予定を追加できます\n✅ 「明日の14時に会議を追加して」などと話しかけてください');
                             
-                            // 接続テスト
                             testCalendarConnection();
                         } else {
                             handleAuthError({error: 'no_access_token'});
@@ -759,7 +709,7 @@
             
             if (error.type === 'popup_closed' || error.message === 'Popup window closed') {
                 errorMessage = 'ポップアップウィンドウが閉じられました。';
-                suggestion = '1. ブラウザのポップアップブロッカーを無効にする\n2. 代替認証方法を試す\n3. デモモードを使用する';
+                suggestion = 'ブラウザのポップアップブロッカーを無効にして再度お試しください。';
             } else {
                 switch(error.error) {
                     case 'idpiframe_initialization_failed':
@@ -775,36 +725,14 @@
                         suggestion = 'インターネット接続を確認してください。';
                         break;
                     default:
-                        suggestion = 'デモモードで機能をテストできます。';
+                        suggestion = '設定を確認してから再度お試しください。';
                 }
             }
             
             updateStatus(errorMessage);
             updateCharacterMood('認証失敗');
             
-            addMessage('ai', '🚨 ' + errorMessage + '\n\n💡 対処法:\n' + suggestion + '\n\nエラー詳細: ' + (error.details || error.message || error.error || 'Unknown error'));
-            
-            setTimeout(function() {
-                var options = [
-                    '代替認証方法を試す',
-                    'デモモードで続行',
-                    'キャンセル'
-                ];
-                
-                var choice = prompt(errorMessage + '\n\n選択してください:\n1. ' + options[0] + '\n2. ' + options[1] + '\n3. ' + options[2] + '\n\n番号を入力:');
-                
-                switch(choice) {
-                    case '1':
-                        tryAlternativeAuth();
-                        break;
-                    case '2':
-                        enableDemoMode();
-                        break;
-                    default:
-                        updateStatus('認証をキャンセルしました');
-                        break;
-                }
-            }, 2000);
+            addMessage('ai', '🚨 ' + errorMessage + '\n\n💡 対処法:\n' + suggestion);
         }
 
         function handleOAuthCallback() {
@@ -813,7 +741,6 @@
                 var hash = window.location.hash.substring(1);
                 var hashParams = new URLSearchParams(hash);
                 
-                // 認証コードまたはアクセストークンをチェック
                 var code = urlParams.get('code');
                 var accessToken = hashParams.get('access_token');
                 var error = urlParams.get('error') || hashParams.get('error');
@@ -836,12 +763,10 @@
                     updateCharacterMood('カレンダー準備完了！');
                     speakText('Googleカレンダーに接続しました。予定の追加が可能です。', true);
                     
-                    // URLをクリーンアップ
                     if (window.history && window.history.replaceState) {
                         window.history.replaceState({}, document.title, window.location.pathname);
                     }
                     
-                    // 接続テスト
                     testCalendarConnection();
                     
                     addMessage('ai', '✅ Googleカレンダーとの認証が完了しました！\n\n「明日の14時に会議を追加して」などと話しかけてください。');
@@ -849,13 +774,8 @@
                 }
                 
                 if (code) {
-                    updateStatus('認証コードを受信しました。デモモードで動作します。');
-                    // 認証コードは受信したが、トークン交換にはサーバーが必要
-                    // デモモードにフォールバック
-                    setTimeout(function() {
-                        enableDemoMode();
-                        addMessage('ai', '📄 認証コードを受信しましたが、完全な認証にはサーバーサイド処理が必要です。\n\nデモモードでカレンダー機能をお試しください！');
-                    }, 1000);
+                    updateStatus('認証コードを受信しましたが、完全な認証には追加設定が必要です。');
+                    addMessage('ai', '📄 認証コードを受信しましたが、完全な認証にはサーバーサイド処理が必要です。Google Cloud Consoleの設定をご確認ください。');
                 }
             } catch (error) {
                 console.log('OAuth callback処理をスキップ:', error);
@@ -1143,8 +1063,8 @@
         }
 
         function addToCalendar(message) {
-            if (!googleAccessToken && !isDemoMode) {
-                return 'Googleカレンダーにまだ接続されていません。設定画面から「Googleカレンダーに接続」をクリックするか、「デモモードを有効化」してください。';
+            if (!googleAccessToken) {
+                return 'Googleカレンダーにまだ接続されていません。設定画面から「Googleカレンダーに接続」をクリックしてください。';
             }
 
             var title = extractEventTitle(message);
@@ -1232,32 +1152,11 @@
 
         function addToGoogleCalendar(eventDetails) {
             return new Promise(function(resolve) {
-                // デモモードかどうかの確認（厳密にチェック）
-                var isRealAuth = googleAccessToken && 
-                               !googleAccessToken.startsWith('demo_token_') && 
-                               !isDemoMode && 
-                               googleAccessToken.startsWith('ya29.');
-                
-                if (!isRealAuth) {
-                    // デモモード
-                    var eventTime = new Date(eventDetails.startTime).toLocaleString('ja-JP', {
-                        year: 'numeric',
-                        month: 'numeric',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    });
-                    
-                    resolve('📅 カレンダーに予定「' + eventDetails.title + '」を追加しました。\n' +
-                           '日時: ' + eventTime + '\n' +
-                           '(デモモード - 実際のGoogleカレンダーへの追加には完全なOAuth2設定が必要です)');
+                if (!googleAccessToken || !googleAccessToken.startsWith('ya29.')) {
+                    resolve('❌ Googleカレンダーに接続されていません。設定画面から接続してください。');
                     return;
                 }
 
-                console.log('実際のGoogle Calendar APIを呼び出し中...');
-                console.log('Access Token:', googleAccessToken.substring(0, 20) + '...');
-                
-                // 実際のGoogle Calendar API呼び出し
                 fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
                     method: 'POST',
                     headers: {
@@ -1283,25 +1182,22 @@
                         }
                     })
                 }).then(function(response) {
-                    console.log('API Response Status:', response.status);
                     if (response.ok) {
                         return response.json();
                     } else {
                         throw new Error('API Error: ' + response.status + ' ' + response.statusText);
                     }
                 }).then(function(result) {
-                    console.log('カレンダー追加成功:', result);
                     var eventTime = new Date(eventDetails.startTime).toLocaleString('ja-JP');
-                    resolve('🎉 **実際のGoogleカレンダーに予定を追加しました！**\n\n' +
-                           '📅 タイトル: 「' + eventDetails.title + '」\n' +
-                           '🕐 日時: ' + eventTime + '\n' +
-                           '🔗 イベントID: ' + result.id + '\n\n' +
+                    resolve('🎉 Googleカレンダーに予定「' + eventDetails.title + '」を追加しました！\n\n' +
+                           '📅 日時: ' + eventTime + '\n' +
+                           '🔗 イベントID: ' + result.id.substring(0, 8) + '...\n\n' +
                            'Googleカレンダーアプリでご確認ください！');
                 }).catch(function(error) {
                     console.error('Calendar API Error:', error);
                     resolve('❌ カレンダーの追加に失敗しました。\n' +
                            'エラー: ' + error.message + '\n\n' +
-                           '認証を更新するか、デモモードをお試しください。');
+                           '認証を更新してから再度お試しください。');
                 });
             });
         }

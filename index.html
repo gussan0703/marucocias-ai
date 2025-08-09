@@ -459,16 +459,20 @@
 
         function connectGoogleCalendar() {
             if (!googleClientId) {
-                alert('Google Client IDを設定してください。\n\n手順:\n1. Google Cloud Console\n2. 認証情報 → OAuth 2.0 クライアント ID\n3. 承認済みのリダイレクトURIに以下を追加:\nhttps://gussan0703.github.io/marucocias-ai/');
+                alert('Google Client IDが設定されていません。\n\n必要な設定:\n1. Google Cloud Console\n2. OAuth同意画面の設定\n3. Calendar APIの有効化\n4. OAuth2.0クライアントIDの作成\n5. リダイレクトURIの追加');
                 return;
             }
 
-            // リダイレクトURIを正確に設定
+            // 詳細なデバッグ情報
+            console.log('=== Google OAuth設定情報 ===');
+            console.log('Client ID:', googleClientId);
+            console.log('現在のURL:', window.location.href);
+            console.log('Origin:', window.location.origin);
+            console.log('Pathname:', window.location.pathname);
+            
+            // 固定リダイレクトURI
             var redirectUri = 'https://gussan0703.github.io/marucocias-ai/';
             var scope = 'https://www.googleapis.com/auth/calendar';
-            
-            console.log('Client ID:', googleClientId);
-            console.log('Redirect URI:', redirectUri);
             
             var authUrl = 'https://accounts.google.com/oauth2/auth?' +
                 'client_id=' + encodeURIComponent(googleClientId) + '&' +
@@ -476,12 +480,19 @@
                 'scope=' + encodeURIComponent(scope) + '&' +
                 'response_type=code&' +
                 'access_type=offline&' +
-                'prompt=consent';
+                'prompt=consent&' +
+                'include_granted_scopes=true';
 
             console.log('認証URL:', authUrl);
-            updateStatus('Google認証ページに移動します...');
+            console.log('リダイレクトURI:', redirectUri);
             
-            window.location.href = authUrl;
+            // ユーザーに確認
+            var confirmed = confirm('Google認証ページに移動します。\n\n設定確認:\n- OAuth同意画面は設定済みですか？\n- Calendar APIは有効化済みですか？\n- テストユーザーに自分を追加しましたか？\n\n続行しますか？');
+            
+            if (confirmed) {
+                updateStatus('Google認証ページに移動中...');
+                window.location.href = authUrl;
+            }
         }
 
         function handleOAuthCallback() {

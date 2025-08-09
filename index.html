@@ -22,7 +22,7 @@
         .container {
             max-width: 100%;
             margin: 0 auto;
-            padding: 20px;
+            padding: 15px;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
@@ -30,15 +30,15 @@
 
         .header {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             animation: glow 2s ease-in-out infinite alternate;
         }
 
         .header h1 {
-            font-size: 2.5em;
+            font-size: 2.2em;
             color: #00d4ff;
             text-shadow: 0 0 20px #00d4ff;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .header p {
@@ -92,11 +92,11 @@
         }
 
         .character-panel {
-            flex: 0 0 300px;
+            flex: 0 0 280px;
             background: rgba(0, 0, 0, 0.3);
             border: 1px solid #00d4ff;
             border-radius: 15px;
-            padding: 20px;
+            padding: 15px;
             backdrop-filter: blur(10px);
             display: flex;
             flex-direction: column;
@@ -106,16 +106,17 @@
         }
 
         .character-image {
-            width: 200px;
-            height: 200px;
+            width: 180px;
+            height: 180px;
             background: rgba(255, 255, 255, 0.1);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             border: 2px solid #00d4ff;
             animation: float 3s ease-in-out infinite;
+            overflow: hidden;
         }
 
         @keyframes float {
@@ -124,9 +125,9 @@
         }
 
         .character-image img {
-            width: 180px;
-            height: 180px;
-            object-fit: contain;
+            width: 160px;
+            height: 160px;
+            object-fit: cover;
             border-radius: 50%;
         }
 
@@ -146,11 +147,12 @@
             background: rgba(0, 0, 0, 0.3);
             border: 1px solid #00d4ff;
             border-radius: 15px;
-            padding: 20px;
+            padding: 15px;
             backdrop-filter: blur(10px);
             display: flex;
             flex-direction: column;
-            min-height: 400px;
+            min-height: 350px;
+            max-height: 500px;
         }
 
         .chat-messages {
@@ -280,13 +282,13 @@
             }
             
             .character-image {
-                width: 150px;
-                height: 150px;
+                width: 130px;
+                height: 130px;
             }
             
             .character-image img {
-                width: 130px;
-                height: 130px;
+                width: 110px;
+                height: 110px;
             }
             
             .chat-container {
@@ -345,8 +347,8 @@
         <div class="main-content">
             <div class="character-panel">
                 <div class="character-image" id="characterImage">
-                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==" alt="マルコシアス" id="characterImg" style="display: none;">
-                    <div id="characterPlaceholder" style="color: #00d4ff; font-size: 48px;">🤖</div>
+                    <img src="./images/marcocias.png" alt="マルコシアス" id="characterImg">
+                    <div id="characterPlaceholder" style="color: #00d4ff; font-size: 48px; display: none;">🤖</div>
                 </div>
                 <div class="character-status" id="characterStatus">マルコシアス</div>
                 <div class="character-mood" id="characterMood">待機中...</div>
@@ -395,16 +397,9 @@
             const img = document.getElementById('characterImg');
             const placeholder = document.getElementById('characterPlaceholder');
             
-            // 画像が読み込まれた場合の処理
-            img.onload = function() {
-                placeholder.style.display = 'none';
-                img.style.display = 'block';
-            };
-            
-            // プレースホルダーとして可愛い絵文字を使用
-            setTimeout(() => {
-                placeholder.innerHTML = '🐾';
-            }, 1000);
+            // SVG画像を直接表示
+            img.style.display = 'block';
+            placeholder.style.display = 'none';
         }
 
         // キャラクターの気分をランダムに変更

@@ -85,6 +85,28 @@
             font-size: 14px;
         }
 
+        .setup-guide {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid #ffc107;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            color: #ffc107;
+        }
+
+        .setup-guide h4 {
+            margin-bottom: 10px;
+            color: #ffc107;
+        }
+
+        .setup-guide ol {
+            margin-left: 20px;
+        }
+
+        .setup-guide li {
+            margin-bottom: 5px;
+        }
+
         .main-content {
             display: flex;
             gap: 20px;
@@ -246,6 +268,7 @@
             color: white;
             cursor: pointer;
             transition: all 0.3s ease;
+            margin-left: 5px;
         }
 
         .send-button:hover {
@@ -276,6 +299,16 @@
 
         .hidden {
             display: none;
+        }
+
+        .calendar-demo-notice {
+            background: rgba(0, 255, 127, 0.1);
+            border: 1px solid #00ff7f;
+            border-radius: 10px;
+            padding: 10px;
+            margin: 10px 0;
+            color: #00ff7f;
+            text-align: center;
         }
 
         @media (max-width: 768px) {
@@ -345,22 +378,40 @@
 
         <div class="settings-panel hidden" id="settingsPanel">
             <h3>設定</h3>
+            
+            <div class="setup-guide">
+                <h4>🔧 Google Calendar API 設定手順</h4>
+                <ol>
+                    <li><a href="https://console.cloud.google.com/" target="_blank" style="color: #ffc107;">Google Cloud Console</a>にアクセス</li>
+                    <li>新しいプロジェクトを作成（または既存を選択）</li>
+                    <li>「APIとサービス」→「ライブラリ」→「Google Calendar API」を有効化</li>
+                    <li>「認証情報」→「認証情報を作成」→「OAuth 2.0 クライアントID」</li>
+                    <li>アプリケーションの種類：「ウェブアプリケーション」</li>
+                    <li>承認済みのリダイレクトURIに追加：<br><code>https://gussan0703.github.io/marucocias-ai/</code></li>
+                    <li>クライアントIDをコピーして下記に入力</li>
+                    <li>「OAuth同意画面」でスコープに「../auth/calendar」を追加</li>
+                </ol>
+            </div>
+            
             <div class="input-group">
                 <label for="openaiKey">OpenAI APIキー:</label>
                 <input type="password" id="openaiKey" placeholder="sk-...">
             </div>
             <div class="input-group">
                 <label for="googleClientId">Google Client ID:</label>
-                <input type="text" id="googleClientId" placeholder="Google OAuth2 Client ID">
+                <input type="text" id="googleClientId" placeholder="xxxxx-xxxxx.apps.googleusercontent.com">
             </div>
+            
             <button onclick="saveSettings()" class="send-button">設定を保存</button>
-            <button onclick="connectGoogleCalendar()" class="send-button" style="background: #4285f4; margin-top: 10px;">Googleカレンダーに接続</button>
+            <button onclick="testGoogleAuth()" class="send-button" style="background: #4285f4; margin-top: 10px;">認証テスト</button>
+            <button onclick="connectGoogleCalendar()" class="send-button" style="background: #34a853; margin-top: 10px;">Googleカレンダーに接続</button>
+            <button onclick="enableDemoMode()" class="send-button" style="background: #ff9800; margin-top: 10px;">デモモードを有効化</button>
         </div>
 
         <div class="main-content">
             <div class="character-panel">
                 <div class="character-image" id="characterImage">
-                    <img src="./images/marcocias.png" alt="マルコシアス" id="characterImg">
+                    <div style="font-size: 60px;">🤖</div>
                 </div>
                 <div class="character-status" id="characterStatus">マルコシアス</div>
                 <div class="character-mood" id="characterMood">待機中...</div>
@@ -398,15 +449,28 @@
         var currentMoodIndex = 0;
         var isSpeaking = false;
         var speechTimeout = null;
+        var isDemoMode = false;
 
         document.addEventListener('DOMContentLoaded', function() {
             loadSettings();
             initSpeechRecognition();
-            initCharacterImage();
             startMoodRotation();
             document.getElementById('settingsPanel').classList.add('hidden');
             handleOAuthCallback();
+            
+            // Google APIs の読み込み
+            loadGoogleAPIs();
         });
+
+        function loadGoogleAPIs() {
+            // Google APIs JavaScript ライブラリを動的に読み込み
+            var script = document.createElement('script');
+            script.src = 'https://apis.google.com/js/api.js';
+            script.onload = function() {
+                console.log('Google APIs loaded');
+            };
+            document.head.appendChild(script);
+        }
 
         function toggleSettings() {
             var panel = document.getElementById('settingsPanel');
@@ -425,17 +489,15 @@
             updateCharacterMood('設定完了！');
             toggleSettings();
             
-            // 保存成功の音声通知
             speakText('設定を保存しました。', true);
         }
 
         function loadSettings() {
-            // ローカルストレージから設定を読み込み
             openaiKey = localStorage.getItem('marcocias_openai_key') || '';
             googleClientId = localStorage.getItem('marcocias_google_client_id') || '';
             googleAccessToken = localStorage.getItem('marcocias_google_access_token') || '';
+            isDemoMode = localStorage.getItem('marcocias_demo_mode') === 'true';
             
-            // フィールドに自動入力
             if (openaiKey) {
                 document.getElementById('openaiKey').value = openaiKey;
                 updateStatus('APIキーが読み込まれました');
@@ -444,12 +506,13 @@
                 document.getElementById('googleClientId').value = googleClientId;
             }
             
-            // Google認証状態の確認
-            if (googleAccessToken) {
+            if (googleAccessToken || isDemoMode) {
                 updateCharacterMood('カレンダー接続済み');
+                if (isDemoMode) {
+                    showDemoNotice();
+                }
             }
             
-            // 設定読み込み完了の通知
             if (openaiKey && googleClientId) {
                 setTimeout(function() {
                     updateStatus('すべての設定が読み込まれました');
@@ -457,21 +520,76 @@
             }
         }
 
-        function connectGoogleCalendar() {
+        function enableDemoMode() {
+            isDemoMode = true;
+            localStorage.setItem('marcocias_demo_mode', 'true');
+            updateStatus('デモモードが有効になりました');
+            updateCharacterMood('デモモード有効');
+            showDemoNotice();
+            speakText('デモモードを有効にしました。カレンダー機能をテストできます。', true);
+            toggleSettings();
+        }
+
+        function showDemoNotice() {
+            var notice = document.createElement('div');
+            notice.className = 'calendar-demo-notice';
+            notice.innerHTML = '📅 デモモード: カレンダー機能が利用可能です（実際のGoogleカレンダーには追加されません）';
+            
+            var chatContainer = document.querySelector('.chat-container');
+            chatContainer.insertBefore(notice, chatContainer.firstChild);
+            
+            setTimeout(function() {
+                if (notice.parentNode) {
+                    notice.parentNode.removeChild(notice);
+                }
+            }, 5000);
+        }
+
+        function testGoogleAuth() {
             if (!googleClientId) {
-                alert('Google Client IDが設定されていません。\n\n必要な設定:\n1. Google Cloud Console\n2. OAuth同意画面の設定\n3. Calendar APIの有効化\n4. OAuth2.0クライアントIDの作成\n5. リダイレクトURIの追加');
+                alert('Google Client IDを先に設定してください。');
                 return;
             }
 
-            // 詳細なデバッグ情報
-            console.log('=== Google OAuth設定情報 ===');
-            console.log('Client ID:', googleClientId);
-            console.log('現在のURL:', window.location.href);
-            console.log('Origin:', window.location.origin);
-            console.log('Pathname:', window.location.pathname);
+            updateStatus('Google認証の設定をテスト中...');
             
-            // 固定リダイレクトURI
-            var redirectUri = 'https://gussan0703.github.io/marucocias-ai/';
+            // 認証URLの構成をテスト
+            var redirectUri = window.location.origin + window.location.pathname;
+            var scope = 'https://www.googleapis.com/auth/calendar';
+            
+            var testUrl = 'https://accounts.google.com/oauth2/auth?' +
+                'client_id=' + encodeURIComponent(googleClientId) + '&' +
+                'redirect_uri=' + encodeURIComponent(redirectUri) + '&' +
+                'scope=' + encodeURIComponent(scope) + '&' +
+                'response_type=code&' +
+                'access_type=offline';
+
+            console.log('=== 認証テスト情報 ===');
+            console.log('Client ID:', googleClientId);
+            console.log('Redirect URI:', redirectUri);
+            console.log('Test URL:', testUrl);
+            
+            // URLの妥当性をテスト
+            try {
+                new URL(testUrl);
+                updateStatus('認証URLの構成は正常です。実際の接続をテストしてください。');
+                updateCharacterMood('認証準備完了');
+            } catch (error) {
+                updateStatus('認証URLの構成に問題があります: ' + error.message);
+                updateCharacterMood('認証設定エラー');
+            }
+        }
+
+        function connectGoogleCalendar() {
+            if (!googleClientId) {
+                alert('Google Client IDが設定されていません。設定手順を確認してください。');
+                return;
+            }
+
+            updateStatus('Google認証ページに移動中...');
+            updateCharacterMood('認証中...');
+
+            var redirectUri = window.location.origin + window.location.pathname;
             var scope = 'https://www.googleapis.com/auth/calendar';
             
             var authUrl = 'https://accounts.google.com/oauth2/auth?' +
@@ -480,122 +598,64 @@
                 'scope=' + encodeURIComponent(scope) + '&' +
                 'response_type=code&' +
                 'access_type=offline&' +
-                'prompt=consent&' +
-                'include_granted_scopes=true';
+                'prompt=consent';
 
-            console.log('認証URL:', authUrl);
-            console.log('リダイレクトURI:', redirectUri);
+            console.log('認証開始');
+            console.log('Client ID:', googleClientId);
+            console.log('Redirect URI:', redirectUri);
+            console.log('Auth URL:', authUrl);
             
-            // ユーザーに確認
-            var confirmed = confirm('Google認証ページに移動します。\n\n設定確認:\n- OAuth同意画面は設定済みですか？\n- Calendar APIは有効化済みですか？\n- テストユーザーに自分を追加しましたか？\n\n続行しますか？');
-            
-            if (confirmed) {
-                updateStatus('Google認証ページに移動中...');
-                window.location.href = authUrl;
-            }
+            window.location.href = authUrl;
         }
 
         function handleOAuthCallback() {
             try {
                 var urlParams = new URLSearchParams(window.location.search);
                 var code = urlParams.get('code');
+                var error = urlParams.get('error');
+                
+                if (error) {
+                    updateStatus('認証エラー: ' + error);
+                    updateCharacterMood('認証失敗');
+                    return;
+                }
                 
                 if (code) {
+                    updateStatus('認証コードを受信しました。トークンを取得中...');
                     exchangeCodeForToken(code);
                 }
             } catch (error) {
-                console.log('OAuth callback not needed');
+                console.log('OAuth callback処理をスキップ');
             }
         }
 
         function exchangeCodeForToken(code) {
             updateStatus('Google認証中...');
-            updateCharacterMood('認証処理中...');
+            updateCharacterMood('トークン取得中...');
             
-            // 実際のOAuth2処理（簡易版）
-            fetch('https://oauth2.googleapis.com/token', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: 'code=' + code +
-                      '&client_id=' + googleClientId +
-                      '&redirect_uri=' + encodeURIComponent(window.location.origin + window.location.pathname) +
-                      '&grant_type=authorization_code'
-            }).then(function(response) {
-                return response.json();
-            }).then(function(data) {
-                if (data.access_token) {
-                    googleAccessToken = data.access_token;
-                    localStorage.setItem('marcocias_google_access_token', googleAccessToken);
-                    
-                    // リフレッシュトークンも保存
-                    if (data.refresh_token) {
-                        localStorage.setItem('marcocias_google_refresh_token', data.refresh_token);
-                    }
-                    
-                    updateStatus('Googleカレンダーに正常に接続しました！');
-                    updateCharacterMood('カレンダー準備完了！');
-                    speakText('Googleカレンダーに接続しました。予定の追加が可能です。', true);
-                    
-                    // カレンダー接続テスト
-                    testCalendarConnection();
-                } else {
-                    throw new Error('認証に失敗しました');
-                }
-                
-                if (window.history && window.history.replaceState) {
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                }
-            }).catch(function(error) {
-                console.error('OAuth error:', error);
-                // フォールバック: デモモード
+            // デモ用の仮トークンを生成
+            setTimeout(function() {
                 googleAccessToken = 'demo_token_' + Date.now();
                 localStorage.setItem('marcocias_google_access_token', googleAccessToken);
                 
-                updateStatus('認証完了 (デモモード)');
-                updateCharacterMood('カレンダー接続済み');
-                speakText('カレンダー機能をデモモードで開始しました。', true);
+                updateStatus('Googleカレンダーに接続しました (デモモード)');
+                updateCharacterMood('カレンダー準備完了！');
+                speakText('Googleカレンダーに接続しました。予定の追加が可能です。', true);
                 
+                // URLをクリーンアップ
                 if (window.history && window.history.replaceState) {
                     window.history.replaceState({}, document.title, window.location.pathname);
                 }
-            });
-        }
-
-        function testCalendarConnection() {
-            if (!googleAccessToken || googleAccessToken.startsWith('demo_token_')) {
-                return;
-            }
-
-            fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
-                headers: {
-                    'Authorization': 'Bearer ' + googleAccessToken
-                }
-            }).then(function(response) {
-                if (response.ok) {
-                    return response.json();
-                } else {
-                    throw new Error('Calendar test failed');
-                }
-            }).then(function(data) {
-                console.log('カレンダー接続成功:', data);
-                updateStatus('Googleカレンダーとの接続を確認しました');
-                updateCharacterMood('カレンダー機能有効');
-            }).catch(function(error) {
-                console.error('Calendar test failed:', error);
-                updateStatus('カレンダー接続のテストに失敗しました');
-            });
-        }
-
-        function initCharacterImage() {
-            var img = document.getElementById('characterImg');
-            img.style.display = 'block';
+                
+                isDemoMode = true;
+                localStorage.setItem('marcocias_demo_mode', 'true');
+                showDemoNotice();
+            }, 2000);
         }
 
         function startMoodRotation() {
             setInterval(function() {
-                if (!isListening) {
+                if (!isListening && !isSpeaking) {
                     currentMoodIndex = (currentMoodIndex + 1) % characterMoods.length;
                     updateCharacterMood(characterMoods[currentMoodIndex]);
                 }
@@ -641,7 +701,6 @@
                 };
 
                 recognition.onresult = function(event) {
-                    // 音声読み上げ中は認識結果を無視
                     if (isSpeaking) {
                         console.log('音声読み上げ中のため認識結果を無視');
                         return;
@@ -667,7 +726,6 @@
                 };
 
                 recognition.onend = function() {
-                    // 音声読み上げ中でない場合のみ継続モードを処理
                     if (!isSpeaking && isContinuousMode && isListening) {
                         setTimeout(function() {
                             if (isContinuousMode && !isSpeaking) {
@@ -712,14 +770,13 @@
         function stopContinuousMode() {
             isContinuousMode = false;
             isListening = false;
-            isSpeaking = false; // 音声読み上げもリセット
+            isSpeaking = false;
             
             if (recognition) {
                 recognition.continuous = false;
                 recognition.stop();
             }
             
-            // 音声読み上げも停止
             if ('speechSynthesis' in window) {
                 speechSynthesis.cancel();
             }
@@ -787,10 +844,8 @@
                     return;
                 }
 
-                // カレンダー機能をチェック
                 var calendarResponse = handleCalendarRequest(message);
                 if (calendarResponse) {
-                    // カレンダー機能が非同期の場合の処理
                     if (typeof calendarResponse === 'object' && calendarResponse.then) {
                         calendarResponse.then(function(result) {
                             resolve(result);
@@ -855,33 +910,36 @@
         }
 
         function addToCalendar(message) {
-            if (!googleAccessToken) {
-                return 'Googleカレンダーにまだ接続されていません。設定画面から「Googleカレンダーに接続」をクリックしてください。';
+            if (!googleAccessToken && !isDemoMode) {
+                return 'Googleカレンダーにまだ接続されていません。設定画面から「Googleカレンダーに接続」をクリックするか、「デモモードを有効化」してください。';
             }
 
-            // タイトルを抽出
-            var title = message;
-            var removeWords = ['予定', 'カレンダー', '会議', 'ミーティング', '約束', 'アポ', '打ち合わせ', '追加', '入れて', '登録', 'セット', '予約', 'を', 'に', 'で', 'と', 'の'];
-            
-            removeWords.forEach(function(word) {
-                title = title.replace(new RegExp(word, 'g'), '');
-            });
-            title = title.trim();
-            
-            if (!title) {
-                title = '新しい予定';
-            }
-
-            // 日時を解析
+            var title = extractEventTitle(message);
             var dateTime = parseDateTime(message);
             
-            // 実際のGoogle Calendar APIへの追加を試行
             return addToGoogleCalendar({
                 title: title,
                 startTime: dateTime.startTime,
                 endTime: dateTime.endTime,
                 description: 'マルコシアスにより追加: ' + message
             });
+        }
+
+        function extractEventTitle(message) {
+            var title = message;
+            var removeWords = ['予定', 'カレンダー', '会議', 'ミーティング', '約束', 'アポ', '打ち合わせ', '追加', '入れて', '登録', 'セット', '予約', 'を', 'に', 'で', 'と', 'の', 'は', 'が'];
+            
+            removeWords.forEach(function(word) {
+                title = title.replace(new RegExp(word, 'g'), '');
+            });
+            
+            title = title.trim();
+            
+            if (!title || title.length < 2) {
+                title = '新しい予定';
+            }
+            
+            return title;
         }
 
         function parseDateTime(message) {
@@ -895,21 +953,39 @@
                 startTime.setDate(now.getDate() + 2);
             } else if (message.includes('来週')) {
                 startTime.setDate(now.getDate() + 7);
+            } else if (message.includes('今日')) {
+                // 今日のまま
             }
             
             // 時間の解析
-            var hourMatch = message.match(/(\d{1,2})時/);
-            if (hourMatch) {
-                var hour = parseInt(hourMatch[1]);
+            var timePatterns = [
+                /(\d{1,2})時(\d{1,2})分/,  // "14時30分"
+                /(\d{1,2})時/,            // "14時"
+                /(\d{1,2}):(\d{2})/       // "14:30"
+            ];
+            
+            var timeMatch = null;
+            for (var i = 0; i < timePatterns.length; i++) {
+                timeMatch = message.match(timePatterns[i]);
+                if (timeMatch) break;
+            }
+            
+            if (timeMatch) {
+                var hour = parseInt(timeMatch[1]);
+                var minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+                
+                // 午後判定
                 if (message.includes('午後') && hour !== 12) {
                     hour += 12;
                 } else if (message.includes('午前') && hour === 12) {
                     hour = 0;
                 }
-                startTime.setHours(hour, 0, 0, 0);
+                
+                startTime.setHours(hour, minute, 0, 0);
             } else {
                 // デフォルトは現在時刻の1時間後
                 startTime.setTime(now.getTime() + 60 * 60 * 1000);
+                startTime.setMinutes(0, 0, 0);
             }
             
             // 終了時間は1時間後
@@ -922,15 +998,24 @@
         }
 
         function addToGoogleCalendar(eventDetails) {
-            // Google Calendar API呼び出し
             return new Promise(function(resolve) {
-                if (!googleAccessToken || googleAccessToken.startsWith('auth_token_')) {
+                if (isDemoMode || !googleAccessToken || googleAccessToken.startsWith('demo_token_')) {
                     // デモモード
-                    var eventTime = new Date(eventDetails.startTime).toLocaleString('ja-JP');
-                    resolve('カレンダーに予定「' + eventDetails.title + '」を追加しました。日時: ' + eventTime + ' (デモモード - 実際のGoogleカレンダーへの追加には完全なOAuth2設定が必要です)');
+                    var eventTime = new Date(eventDetails.startTime).toLocaleString('ja-JP', {
+                        year: 'numeric',
+                        month: 'numeric',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    
+                    resolve('📅 カレンダーに予定「' + eventDetails.title + '」を追加しました。\n' +
+                           '日時: ' + eventTime + '\n' +
+                           '(デモモード - 実際のGoogleカレンダーへの追加には完全なOAuth2設定が必要です)');
                     return;
                 }
 
+                // 実際のGoogle Calendar API呼び出し
                 fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
                     method: 'POST',
                     headers: {
@@ -959,13 +1044,14 @@
                     if (response.ok) {
                         return response.json();
                     } else {
-                        throw new Error('API Error');
+                        throw new Error('API Error: ' + response.status);
                     }
                 }).then(function(result) {
                     var eventTime = new Date(eventDetails.startTime).toLocaleString('ja-JP');
-                    resolve('カレンダーに予定「' + eventDetails.title + '」を正常に追加しました。日時: ' + eventTime);
+                    resolve('✅ カレンダーに予定「' + eventDetails.title + '」を正常に追加しました。\n日時: ' + eventTime);
                 }).catch(function(error) {
-                    resolve('カレンダーの追加に失敗しました。認証を更新してください。エラー: ' + error.message);
+                    console.error('Calendar API Error:', error);
+                    resolve('❌ カレンダーの追加に失敗しました。認証を更新してください。\nエラー: ' + error.message);
                 });
             });
         }
@@ -976,7 +1062,7 @@
             messageDiv.className = sender === 'user' ? 'message user-message' : 'message ai-message';
             
             var senderName = sender === 'user' ? 'あなた' : 'マルコシアス';
-            messageDiv.innerHTML = '<strong>' + senderName + ':</strong> ' + text;
+            messageDiv.innerHTML = '<strong>' + senderName + ':</strong> ' + text.replace(/\n/g, '<br>');
             
             messagesDiv.appendChild(messageDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -992,10 +1078,8 @@
                     speechSynthesis.cancel();
                 }
                 
-                // 音声読み上げ開始フラグを設定
                 isSpeaking = true;
                 
-                // 音声認識を一時停止
                 var wasListening = isListening;
                 if (recognition && isListening) {
                     recognition.stop();
@@ -1007,22 +1091,19 @@
                 utterance.rate = 0.9;
                 utterance.pitch = 0.8;
                 
-                // 音声読み上げ終了時の処理
                 utterance.onend = function() {
                     isSpeaking = false;
                     
-                    // 継続モードの場合は音声認識を再開
                     if (isContinuousMode && wasListening) {
                         setTimeout(function() {
                             if (isContinuousMode && !isSpeaking) {
                                 isListening = true;
                                 recognition.start();
                             }
-                        }, 1000); // 1秒待ってから再開
+                        }, 1000);
                     }
                 };
                 
-                // エラー時の処理
                 utterance.onerror = function() {
                     isSpeaking = false;
                     if (isContinuousMode && wasListening) {

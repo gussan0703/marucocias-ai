@@ -396,6 +396,8 @@
         var googleAccessToken = '';
         var characterMoods = ['待機中...', 'お手伝いします', '考え中...', '準備完了', 'いつでもどうぞ'];
         var currentMoodIndex = 0;
+        var isSpeaking = false;
+        var speechTimeout = null;
 
         document.addEventListener('DOMContentLoaded', function() {
             loadSettings();
@@ -457,14 +459,15 @@
 
         function connectGoogleCalendar() {
             if (!googleClientId) {
-                alert('Google Client IDを設定してください。まず、Google Cloud Consoleでプロジェクトを作成し、Calendar APIを有効化して、OAuth2クライアントIDを取得してください。');
+                alert('Google Client IDを設定してください。\n\n手順:\n1. Google Cloud Console\n2. 認証情報 → OAuth 2.0 クライアント ID\n3. 承認済みのリダイレクトURIに以下を追加:\nhttps://gussan0703.github.io/marucocias-ai/');
                 return;
             }
 
+            // リダイレクトURIを正確に設定
+            var redirectUri = 'https://gussan0703.github.io/marucocias-ai/';
             var scope = 'https://www.googleapis.com/auth/calendar';
-            var redirectUri = window.location.origin + window.location.pathname;
             
-            // リダイレクトURIを確認
+            console.log('Client ID:', googleClientId);
             console.log('Redirect URI:', redirectUri);
             
             var authUrl = 'https://accounts.google.com/oauth2/auth?' +
@@ -475,7 +478,9 @@
                 'access_type=offline&' +
                 'prompt=consent';
 
-            console.log('Auth URL:', authUrl);
+            console.log('認証URL:', authUrl);
+            updateStatus('Google認証ページに移動します...');
+            
             window.location.href = authUrl;
         }
 
@@ -625,6 +630,12 @@
                 };
 
                 recognition.onresult = function(event) {
+                    // 音声読み上げ中は認識結果を無視
+                    if (isSpeaking) {
+                        console.log('音声読み上げ中のため認識結果を無視');
+                        return;
+                    }
+                    
                     var transcript = event.results[0][0].transcript;
                     document.getElementById('textInput').value = transcript;
                     updateStatus('音声を認識しました: ' + transcript);
@@ -645,13 +656,14 @@
                 };
 
                 recognition.onend = function() {
-                    if (isContinuousMode && isListening) {
+                    // 音声読み上げ中でない場合のみ継続モードを処理
+                    if (!isSpeaking && isContinuousMode && isListening) {
                         setTimeout(function() {
-                            if (isContinuousMode) {
+                            if (isContinuousMode && !isSpeaking) {
                                 recognition.start();
                             }
                         }, 1000);
-                    } else {
+                    } else if (!isContinuousMode) {
                         stopListening();
                         animateCharacter('default');
                     }
@@ -689,10 +701,18 @@
         function stopContinuousMode() {
             isContinuousMode = false;
             isListening = false;
+            isSpeaking = false; // 音声読み上げもリセット
+            
             if (recognition) {
                 recognition.continuous = false;
                 recognition.stop();
             }
+            
+            // 音声読み上げも停止
+            if ('speechSynthesis' in window) {
+                speechSynthesis.cancel();
+            }
+            
             document.getElementById('voiceButton').classList.remove('listening');
             document.getElementById('voiceButton').innerHTML = '🎤';
             updateStatus('継続モード終了');
@@ -961,20 +981,46 @@
                     speechSynthesis.cancel();
                 }
                 
+                // 音声読み上げ開始フラグを設定
+                isSpeaking = true;
+                
+                // 音声認識を一時停止
+                var wasListening = isListening;
+                if (recognition && isListening) {
+                    recognition.stop();
+                    isListening = false;
+                }
+                
                 var utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = 'ja-JP';
                 utterance.rate = 0.9;
                 utterance.pitch = 0.8;
                 
-                // 音声読み上げ開始時に音声認識を一時停止
-                utterance.onstart = function() {
-                    if (recognition && isListening) {
-                        recognition.stop();
+                // 音声読み上げ終了時の処理
+                utterance.onend = function() {
+                    isSpeaking = false;
+                    
+                    // 継続モードの場合は音声認識を再開
+                    if (isContinuousMode && wasListening) {
                         setTimeout(function() {
-                            if (isContinuousMode && isListening) {
+                            if (isContinuousMode && !isSpeaking) {
+                                isListening = true;
                                 recognition.start();
                             }
-                        }, utterance.text.length * 100 + 1000); // 読み上げ時間を推定
+                        }, 1000); // 1秒待ってから再開
+                    }
+                };
+                
+                // エラー時の処理
+                utterance.onerror = function() {
+                    isSpeaking = false;
+                    if (isContinuousMode && wasListening) {
+                        setTimeout(function() {
+                            if (isContinuousMode && !isSpeaking) {
+                                isListening = true;
+                                recognition.start();
+                            }
+                        }, 1000);
                     }
                 };
                 

@@ -672,6 +672,9 @@
                 var tokenClient = google.accounts.oauth2.initTokenClient({
                     client_id: googleClientId,
                     scope: 'https://www.googleapis.com/auth/calendar',
+                    // ポップアップの代わりにリダイレクトを使用
+                    ux_mode: 'redirect',
+                    redirect_uri: window.location.origin + window.location.pathname,
                     callback: function(response) {
                         console.log('認証レスポンス:', response);
                         
@@ -697,7 +700,16 @@
                     },
                     error_callback: function(error) {
                         console.error('Token client error:', error);
-                        handleAuthError(error);
+                        
+                        if (error.type === 'popup_closed') {
+                            // ポップアップが閉じられた場合は代替方法を提案
+                            updateStatus('ポップアップが閉じられました。代替方法を試しています...');
+                            setTimeout(function() {
+                                tryAlternativeAuth();
+                            }, 1000);
+                        } else {
+                            handleAuthError(error);
+                        }
                     }
                 });
 
@@ -712,38 +724,78 @@
             }
         }
 
+        function tryAlternativeAuth() {
+            updateStatus('代替認証方法を試行中...');
+            
+            // Google OAuth2 エンドポイントに直接リダイレクト
+            var authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' +
+                'client_id=' + encodeURIComponent(googleClientId) + '&' +
+                'redirect_uri=' + encodeURIComponent(window.location.origin + window.location.pathname) + '&' +
+                'scope=' + encodeURIComponent('https://www.googleapis.com/auth/calendar') + '&' +
+                'response_type=token&' +
+                'include_granted_scopes=true&' +
+                'state=calendar_auth';
+
+            updateCharacterMood('リダイレクト認証中...');
+            addMessage('ai', '🔄 ポップアップ認証に失敗したため、ページリダイレクト方式で認証を行います。\n\nGoogleログイン画面に移動します...');
+            
+            setTimeout(function() {
+                window.location.href = authUrl;
+            }, 2000);
+        }
+
         function handleAuthError(error) {
             console.error('認証エラー:', error);
             
             var errorMessage = 'Google認証に失敗しました。';
             var suggestion = '';
             
-            switch(error.error) {
-                case 'idpiframe_initialization_failed':
-                    errorMessage = 'Google認証の初期化に失敗しました。';
-                    suggestion = 'OAuth同意画面とクライアントIDの設定を確認してください。';
-                    break;
-                case 'popup_blocked':
-                    errorMessage = 'ポップアップがブロックされました。';
-                    suggestion = 'ブラウザのポップアップブロッカーを無効にしてください。';
-                    break;
-                case 'library_load_failed':
-                    errorMessage = 'Google認証ライブラリの読み込みに失敗しました。';
-                    suggestion = 'インターネット接続を確認してください。';
-                    break;
-                default:
-                    suggestion = 'デモモードで機能をテストできます。';
+            if (error.type === 'popup_closed' || error.message === 'Popup window closed') {
+                errorMessage = 'ポップアップウィンドウが閉じられました。';
+                suggestion = '1. ブラウザのポップアップブロッカーを無効にする\n2. 代替認証方法を試す\n3. デモモードを使用する';
+            } else {
+                switch(error.error) {
+                    case 'idpiframe_initialization_failed':
+                        errorMessage = 'Google認証の初期化に失敗しました。';
+                        suggestion = 'OAuth同意画面とクライアントIDの設定を確認してください。';
+                        break;
+                    case 'popup_blocked':
+                        errorMessage = 'ポップアップがブロックされました。';
+                        suggestion = 'ブラウザのポップアップブロッカーを無効にしてください。';
+                        break;
+                    case 'library_load_failed':
+                        errorMessage = 'Google認証ライブラリの読み込みに失敗しました。';
+                        suggestion = 'インターネット接続を確認してください。';
+                        break;
+                    default:
+                        suggestion = 'デモモードで機能をテストできます。';
+                }
             }
             
             updateStatus(errorMessage);
             updateCharacterMood('認証失敗');
             
-            addMessage('ai', '🚨 ' + errorMessage + '\n\n' + suggestion + '\n\nエラー詳細: ' + (error.details || error.error || 'Unknown error'));
+            addMessage('ai', '🚨 ' + errorMessage + '\n\n💡 対処法:\n' + suggestion + '\n\nエラー詳細: ' + (error.details || error.message || error.error || 'Unknown error'));
             
             setTimeout(function() {
-                var useDemo = confirm(errorMessage + '\n\n' + suggestion + '\n\nデモモードで続行しますか？');
-                if (useDemo) {
-                    enableDemoMode();
+                var options = [
+                    '代替認証方法を試す',
+                    'デモモードで続行',
+                    'キャンセル'
+                ];
+                
+                var choice = prompt(errorMessage + '\n\n選択してください:\n1. ' + options[0] + '\n2. ' + options[1] + '\n3. ' + options[2] + '\n\n番号を入力:');
+                
+                switch(choice) {
+                    case '1':
+                        tryAlternativeAuth();
+                        break;
+                    case '2':
+                        enableDemoMode();
+                        break;
+                    default:
+                        updateStatus('認証をキャンセルしました');
+                        break;
                 }
             }, 2000);
         }
@@ -751,21 +803,55 @@
         function handleOAuthCallback() {
             try {
                 var urlParams = new URLSearchParams(window.location.search);
+                var hash = window.location.hash.substring(1);
+                var hashParams = new URLSearchParams(hash);
+                
+                // 認証コードまたはアクセストークンをチェック
                 var code = urlParams.get('code');
-                var error = urlParams.get('error');
+                var accessToken = hashParams.get('access_token');
+                var error = urlParams.get('error') || hashParams.get('error');
+                var state = urlParams.get('state') || hashParams.get('state');
                 
                 if (error) {
+                    console.error('OAuth error:', error);
                     updateStatus('認証エラー: ' + error);
                     updateCharacterMood('認証失敗');
                     return;
                 }
                 
+                if (accessToken && state === 'calendar_auth') {
+                    updateStatus('認証成功！アクセストークンを取得しました。');
+                    
+                    googleAccessToken = accessToken;
+                    localStorage.setItem('marcocias_google_access_token', googleAccessToken);
+                    
+                    updateStatus('Googleカレンダーに接続しました！');
+                    updateCharacterMood('カレンダー準備完了！');
+                    speakText('Googleカレンダーに接続しました。予定の追加が可能です。', true);
+                    
+                    // URLをクリーンアップ
+                    if (window.history && window.history.replaceState) {
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
+                    
+                    // 接続テスト
+                    testCalendarConnection();
+                    
+                    addMessage('ai', '✅ Googleカレンダーとの認証が完了しました！\n\n「明日の14時に会議を追加して」などと話しかけてください。');
+                    return;
+                }
+                
                 if (code) {
-                    updateStatus('認証コードを受信しました。トークンを取得中...');
-                    exchangeCodeForToken(code);
+                    updateStatus('認証コードを受信しました。デモモードで動作します。');
+                    // 認証コードは受信したが、トークン交換にはサーバーが必要
+                    // デモモードにフォールバック
+                    setTimeout(function() {
+                        enableDemoMode();
+                        addMessage('ai', '📄 認証コードを受信しましたが、完全な認証にはサーバーサイド処理が必要です。\n\nデモモードでカレンダー機能をお試しください！');
+                    }, 1000);
                 }
             } catch (error) {
-                console.log('OAuth callback処理をスキップ');
+                console.log('OAuth callback処理をスキップ:', error);
             }
         }
 

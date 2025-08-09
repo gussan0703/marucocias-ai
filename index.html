@@ -465,27 +465,12 @@
         });
 
         function loadGoogleAPIs() {
-            // Google APIs JavaScript ライブラリを動的に読み込み
-            var gapiScript = document.createElement('script');
-            gapiScript.src = 'https://apis.google.com/js/api.js';
-            gapiScript.onload = function() {
-                console.log('Google API (gapi) loaded');
-            };
-            gapiScript.onerror = function() {
-                console.log('Google API (gapi) failed to load');
-            };
-            document.head.appendChild(gapiScript);
-            
-            // Google Identity Services ライブラリも読み込み
-            var gisScript = document.createElement('script');
-            gisScript.src = 'https://accounts.google.com/gsi/client';
-            gisScript.onload = function() {
-                console.log('Google Identity Services (GIS) loaded');
-            };
-            gisScript.onerror = function() {
-                console.log('Google Identity Services (GIS) failed to load');
-            };
-            document.head.appendChild(gisScript);
+            // Google Identity Services のみを読み込み（最新の推奨方法）
+            loadGoogleIdentityServices().then(function() {
+                console.log('Google Identity Services ready');
+            }).catch(function(error) {
+                console.error('Failed to load Google Identity Services:', error);
+            });
         }
 
         function toggleSettings() {
@@ -643,82 +628,120 @@
                 return;
             }
 
-            // Google Auth Library を使用した簡易認証
-            if (typeof gapi !== 'undefined') {
-                // Google API Library が利用可能な場合
-                initGoogleAuth();
+            updateStatus('Google認証を開始しています...');
+            updateCharacterMood('認証中...');
+
+            // 最新のGoogle Identity Services を使用
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+                initGoogleIdentityServices();
             } else {
-                // フォールバック: Google Identity Services
-                if (typeof google !== 'undefined' && google.accounts) {
+                // Google Identity Services がロードされていない場合
+                loadGoogleIdentityServices().then(function() {
                     initGoogleIdentityServices();
-                } else {
-                    // 最終フォールバック: デモモード
-                    updateStatus('Google認証ライブラリが利用できません。デモモードを使用してください。');
-                    updateCharacterMood('認証ライブラリ不在');
-                    setTimeout(function() {
-                        var confirmed = confirm('Google認証ライブラリが読み込まれていません。\nデモモードを有効にしますか？');
-                        if (confirmed) {
-                            enableDemoMode();
-                        }
-                    }, 1000);
-                }
+                }).catch(function(error) {
+                    console.error('Google Identity Services の読み込みに失敗:', error);
+                    handleAuthError({error: 'library_load_failed'});
+                });
             }
         }
 
-        function initGoogleAuth() {
-            updateStatus('Google認証を初期化中...');
-            
-            gapi.load('auth2', function() {
-                gapi.auth2.init({
-                    client_id: googleClientId,
-                    scope: 'https://www.googleapis.com/auth/calendar'
-                }).then(function() {
-                    var authInstance = gapi.auth2.getAuthInstance();
-                    return authInstance.signIn();
-                }).then(function(googleUser) {
-                    var authResponse = googleUser.getAuthResponse();
-                    googleAccessToken = authResponse.access_token;
-                    localStorage.setItem('marcocias_google_access_token', googleAccessToken);
-                    
-                    updateStatus('Googleカレンダーに接続しました！');
-                    updateCharacterMood('カレンダー準備完了！');
-                    speakText('Googleカレンダーに接続しました。予定の追加が可能です。', true);
-                    
-                }).catch(function(error) {
-                    console.error('Google Auth error:', error);
-                    handleAuthError(error);
-                });
+        function loadGoogleIdentityServices() {
+            return new Promise(function(resolve, reject) {
+                if (typeof google !== 'undefined' && google.accounts) {
+                    resolve();
+                    return;
+                }
+
+                var script = document.createElement('script');
+                script.src = 'https://accounts.google.com/gsi/client';
+                script.onload = function() {
+                    console.log('Google Identity Services loaded successfully');
+                    resolve();
+                };
+                script.onerror = function() {
+                    reject(new Error('Failed to load Google Identity Services'));
+                };
+                document.head.appendChild(script);
             });
         }
 
         function initGoogleIdentityServices() {
-            updateStatus('Google Identity Servicesを初期化中...');
+            updateStatus('Google Identity Services を初期化中...');
             
-            google.accounts.oauth2.initTokenClient({
-                client_id: googleClientId,
-                scope: 'https://www.googleapis.com/auth/calendar',
-                callback: function(response) {
-                    if (response.access_token) {
-                        googleAccessToken = response.access_token;
-                        localStorage.setItem('marcocias_google_access_token', googleAccessToken);
+            try {
+                var tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: googleClientId,
+                    scope: 'https://www.googleapis.com/auth/calendar',
+                    callback: function(response) {
+                        console.log('認証レスポンス:', response);
                         
-                        updateStatus('Googleカレンダーに接続しました！');
-                        updateCharacterMood('カレンダー準備完了！');
-                        speakText('Googleカレンダーに接続しました。予定の追加が可能です。', true);
-                    } else {
-                        handleAuthError(response);
+                        if (response.error) {
+                            console.error('認証エラー:', response);
+                            handleAuthError(response);
+                            return;
+                        }
+
+                        if (response.access_token) {
+                            googleAccessToken = response.access_token;
+                            localStorage.setItem('marcocias_google_access_token', googleAccessToken);
+                            
+                            updateStatus('Googleカレンダーに接続しました！');
+                            updateCharacterMood('カレンダー準備完了！');
+                            speakText('Googleカレンダーに接続しました。予定の追加が可能です。', true);
+                            
+                            // 接続テスト
+                            testCalendarConnection();
+                        } else {
+                            handleAuthError({error: 'no_access_token'});
+                        }
+                    },
+                    error_callback: function(error) {
+                        console.error('Token client error:', error);
+                        handleAuthError(error);
                     }
-                }
-            }).requestAccessToken();
+                });
+
+                // アクセストークンをリクエスト
+                tokenClient.requestAccessToken({
+                    prompt: 'consent'
+                });
+
+            } catch (error) {
+                console.error('Google Identity Services 初期化エラー:', error);
+                handleAuthError({error: 'initialization_failed', details: error.message});
+            }
         }
 
         function handleAuthError(error) {
             console.error('認証エラー:', error);
-            updateStatus('認証に失敗しました。デモモードを使用してください。');
+            
+            var errorMessage = 'Google認証に失敗しました。';
+            var suggestion = '';
+            
+            switch(error.error) {
+                case 'idpiframe_initialization_failed':
+                    errorMessage = 'Google認証の初期化に失敗しました。';
+                    suggestion = 'OAuth同意画面とクライアントIDの設定を確認してください。';
+                    break;
+                case 'popup_blocked':
+                    errorMessage = 'ポップアップがブロックされました。';
+                    suggestion = 'ブラウザのポップアップブロッカーを無効にしてください。';
+                    break;
+                case 'library_load_failed':
+                    errorMessage = 'Google認証ライブラリの読み込みに失敗しました。';
+                    suggestion = 'インターネット接続を確認してください。';
+                    break;
+                default:
+                    suggestion = 'デモモードで機能をテストできます。';
+            }
+            
+            updateStatus(errorMessage);
             updateCharacterMood('認証失敗');
             
+            addMessage('ai', '🚨 ' + errorMessage + '\n\n' + suggestion + '\n\nエラー詳細: ' + (error.details || error.error || 'Unknown error'));
+            
             setTimeout(function() {
-                var useDemo = confirm('Google認証に失敗しました。\n\n可能な原因:\n- OAuth同意画面の設定が不完全\n- Client IDが無効\n- ドメインの不一致\n\nデモモードで続行しますか？');
+                var useDemo = confirm(errorMessage + '\n\n' + suggestion + '\n\nデモモードで続行しますか？');
                 if (useDemo) {
                     enableDemoMode();
                 }
